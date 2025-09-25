@@ -153,6 +153,31 @@ python3 main.py
 
 只需发送图片，Bot 会自动识别并创建相应的待办事项。
 
+## 使用示例
+
+### 通过Telegram Bot创建待办事项
+
+以下示例展示了如何通过Telegram Bot与Microsoft To Do进行交互：
+
+#### 示例1：通过消息创建待办事项
+<img width="895" height="467" alt="image" src="https://github.com/user-attachments/assets/18205277-5d2e-4b11-974b-81426fbdde0e" />
+
+
+*通过发送消息"通义大模型的研究和应用走向生成式人工智能"，Bot自动识别并创建了相应的待办事项，包含详细的时间、地点等信息。*
+
+#### 示例2：Microsoft To Do同步效果
+<img width="2270" height="901" alt="image" src="https://github.com/user-attachments/assets/86ee10d0-f205-406d-8a08-c4e02fd0c780" />
+
+
+*创建的待办事项会自动同步到Microsoft To Do中，包含完整的任务详情和提醒设置。*
+
+### 主要特性展示
+- 智能语义分析：自动从自然语言中提取任务信息
+- 实时同步：Telegram Bot与Microsoft To Do双向同步
+- 丰富信息：支持时间、地点、描述等详细信息
+- 提醒功能：自动设置提醒时间
+- 修改功能（尚未实现）
+
 ## 项目结构
 ```
 ToDoMCP/

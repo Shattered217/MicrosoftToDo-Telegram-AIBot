@@ -1,0 +1,246 @@
+import base64
+import logging
+from typing import Dict, Any, Optional, List
+from openai import OpenAI
+from config import Config
+
+logger = logging.getLogger(__name__)
+
+class AIService:
+    
+    def __init__(self):
+        self.client = OpenAI(
+            api_key=Config.OPENAI_API_KEY,
+            base_url=Config.OPENAI_BASE_URL
+        )
+        self.model = Config.OPENAI_MODEL
+    
+    async def analyze_text_for_todos(self, text: str, existing_todos: List[Dict] = None) -> Dict[str, Any]:
+        
+        existing_context = ""
+        if existing_todos:
+            existing_context = f"\n\n当前已有的待办事项：\n" + "\n".join([
+                f"- {todo.get('title', 'N/A')} (ID: {todo.get('id', 'N/A')}, 状态: {'已完成' if todo.get('completed', False) else '未完成'})"
+                for todo in existing_todos[:10]  # 限制数量避免token过多
+            ])
+        
+        system_prompt = f"""你是一个智能待办事项提取器。你的任务是将用户的任何文本消息都转换为具体的待办事项。
+
+核心原则：
+1. 每条消息都应该被解析为至少一个待办事项（除非是明确的操作指令）
+2. 自动识别和提取时间信息（日期、时间、截止时间等）
+3. 提取任务的核心内容作为标题
+4. 将详细信息作为描述
+
+操作类型判断：
+- 如果包含"完成了"、"做完了"、"标记完成"等词语 → COMPLETE
+- 如果包含"删除"、"取消"、"移除"等词语 → DELETE  
+- 如果包含"修改"、"更新"、"改成"等词语 → UPDATE
+- 如果包含"查看"、"显示"、"列表"等词语 → LIST
+- 如果包含"搜索"、"找"、"查找"等词语 → SEARCH
+- 其他所有情况 → CREATE（默认创建任务）
+
+时间识别规则：
+- 截止日期格式：将相对日期转换为YYYY-MM-DD格式
+  * 今天 → 2025-09-25
+  * 明天 → 2025-09-26  
+  * 后天 → 2025-09-27
+  * 周五 → 2025-09-27（本周或下周的周五）
+  * 9月26日 → 2025-09-26
+  * 本周末 → 2025-09-28
+  * 下周一 → 2025-09-30
+- 尽量从用户输入中提取任何可能的日期信息作为截止日期
+- 提醒时间规则：
+  * 如果任务提到具体时间（如"下午3点开会"），提取该时间作为提醒时间
+  * 如果只有日期没有时间，根据任务重要性设置合适的提醒时间
+  * 重要任务（会议、约会等）：提前1天提醒，时间为09:00
+  * 普通任务：当天提醒，时间为09:00
+- 不再提取due_time字段，只关注due_date
+
+请以JSON格式返回，包含：
+- action: 操作类型（CREATE/UPDATE/COMPLETE/DELETE/LIST/SEARCH）
+- title: 任务标题（简洁明了）
+- description: 详细描述（包含所有相关信息）
+- due_date: 截止日期（YYYY-MM-DD格式，尽量提取任何可能的日期信息）
+- reminder_date: 提醒日期（YYYY-MM-DD格式，根据任务重要性设置）
+- reminder_time: 提醒时间（HH:MM格式，根据任务具体时间或重要性设置）
+- search_query: 搜索关键词（仅SEARCH操作）
+- todo_id: 待办事项ID（仅UPDATE/COMPLETE/DELETE操作，如果提到具体ID）
+- confidence: 置信度（0-1）
+
+{existing_context}"""
+
+        user_prompt = f"用户输入：{text}"
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            
+            content = response.choices[0].message.content
+            logger.info(f"AI分析结果: {content}")
+            
+            import json
+            try:
+                result = json.loads(content)
+                return result
+            except json.JSONDecodeError:
+                return {
+                    "action": "CREATE",
+                    "title": text[:50] + "..." if len(text) > 50 else text,
+                    "description": text,
+                    "due_date": None,
+                    "reminder_date": None,
+                    "reminder_time": None,
+                    "search_query": "",
+                    "todo_id": "",
+                    "confidence": 0.5
+                }
+                
+        except Exception as e:
+            logger.error(f"AI分析失败: {e}")
+            return {
+                "action": "CREATE",
+                "title": text[:50] + "..." if len(text) > 50 else text,
+                "description": text,
+                "due_date": None,
+                "reminder_date": None,
+                "reminder_time": None,
+                "search_query": "",
+                "todo_id": "",
+                "confidence": 0.0
+            }
+    
+    async def analyze_image_for_todos(self, image_data: bytes, image_format: str, existing_todos: List[Dict] = None) -> Dict[str, Any]:
+        
+        existing_context = ""
+        if existing_todos:
+            existing_context = f"\n\n当前已有的待办事项：\n" + "\n".join([
+                f"- {todo.get('title', 'N/A')} (ID: {todo.get('id', 'N/A')}, 状态: {'已完成' if todo.get('completed', False) else '未完成'})"
+                for todo in existing_todos[:10]
+            ])
+        
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        
+        system_prompt = f"""你是一个智能待办事项助手。用户会发送图片，你需要分析图片内容并提取待办事项相关信息。
+
+请分析图片中的内容，识别文字、物品、场景等，判断用户可能想要创建什么样的待办事项。
+
+可能的场景包括：
+- 手写的待办清单
+- 会议白板上的任务
+- 购物清单
+- 提醒便签
+- 日程安排
+- 工作计划等
+
+请以JSON格式返回分析结果，包含以下字段：
+- action: 通常是CREATE（从图片创建待办事项）
+- items: 从图片中提取的待办事项列表，每个包含title和description
+- confidence: 置信度（0-1）
+- reasoning: 分析推理过程
+- image_description: 图片内容描述
+
+{existing_context}"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=Config.OPENAI_VL_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/{image_format};base64,{image_base64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.3,
+                max_tokens=1500
+            )
+            
+            content = response.choices[0].message.content
+            logger.info(f"图片AI分析结果: {content}")
+            
+            import json
+            try:
+                result = json.loads(content)
+                return result
+            except json.JSONDecodeError:
+                return {
+                    "action": "CREATE",
+                    "items": [{"title": "图片待办事项", "description": content}],
+                    "confidence": 0.5,
+                    "reasoning": "无法解析AI响应为JSON格式",
+                    "image_description": content
+                }
+                
+        except Exception as e:
+            logger.error(f"图片AI分析失败: {e}")
+            return {
+                "action": "CREATE",
+                "items": [{"title": "图片待办事项", "description": "无法分析图片内容"}],
+                "confidence": 0.0,
+                "reasoning": f"AI服务错误: {str(e)}",
+                "image_description": "分析失败"
+            }
+    
+    async def generate_response(self, analysis_result: Dict[str, Any], operation_result: Any) -> str:
+        
+        action = analysis_result.get("action", "QUERY")
+        confidence = analysis_result.get("confidence", 0.0)
+        
+        try:
+            system_prompt = """你是一个友好的待办事项助手。根据用户的操作结果，生成简洁、友好的中文回复。
+
+回复要求：
+- 简洁明了，不超过100字
+- 语气友好自然
+- 确认用户的操作结果
+- 如果操作失败，提供简单的建议"""
+
+            user_prompt = f"""
+操作类型: {action}
+分析置信度: {confidence}
+操作结果: {str(operation_result)}
+分析推理: {analysis_result.get('reasoning', '')}
+
+请生成一个友好的回复。"""
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=200
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            logger.error(f"生成回复失败: {e}")
+            if action == "CREATE":
+                return "待办事项已创建成功！"
+            elif action == "COMPLETE":
+                return "待办事项已标记为完成！"
+            elif action == "UPDATE":
+                return "待办事项已更新！"
+            elif action == "DELETE":
+                return "待办事项已删除！"
+            elif action == "LIST":
+                return "这是您的待办事项列表："
+            else:
+                return "收到您的消息，正在处理中..."

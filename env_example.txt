@@ -1,0 +1,52 @@
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+
+# Vision-Language Model for Image Analysis
+OPENAI_VL_MODEL=gpt-4o
+# 其他VL模型选项：
+# OPENAI_VL_MODEL=gpt-4-vision-preview
+# OPENAI_VL_MODEL=gpt-4o-mini  # 如果支持图片的话
+
+# Microsoft Todo Authentication
+MS_TODO_ACCESS_TOKEN=your_access_token_here
+MS_TODO_REFRESH_TOKEN=your_refresh_token_here
+
+# Azure App Registration (required for authentication)
+MS_TODO_CLIENT_ID=your_client_id_here
+
+# Account Type Configuration:
+# 1. 个人账户 (Personal Account): 
+#    - 不需要设置 MS_TODO_CLIENT_SECRET (留空或删除该行)
+#    - 系统会自动使用浏览器认证
+#    - MS_TODO_TENANT_ID 会自动设为 consumers
+
+# 2. 工作/学校账户 (Work/School Account):
+#    - 必须设置 MS_TODO_CLIENT_SECRET
+#    - 系统会自动使用密钥认证
+#    - 设置相应的 MS_TODO_TENANT_ID
+MS_TODO_CLIENT_SECRET=your_client_secret_here
+
+# Tenant Configuration (仅工作/学校账户需要)
+# For work/school accounts:
+MS_TODO_TENANT_ID=organizations
+# For specific organization:
+# MS_TODO_TENANT_ID=your_tenant_id_here
+# 注意：个人账户会自动使用 consumers，无需设置
+
+
+# Application Settings
+DEBUG=True
+MAX_IMAGE_SIZE=5242880  # 5MB in bytes
+ALLOWED_IMAGE_FORMATS=jpg,jpeg,png,gif,webp
+
+# Timezone Configuration
+TIMEZONE=Asia/Shanghai  # 默认东8区（中国标准时间）
+# 其他时区示例：
+# TIMEZONE=America/New_York  # 美国东部时间
+# TIMEZONE=Europe/London     # 英国时间
+# TIMEZONE=UTC              # UTC时间

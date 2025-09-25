@@ -1,0 +1,9 @@
+python-telegram-bot==20.7
+openai==1.51.0
+python-dotenv==1.0.0
+requests==2.31.0
+Pillow==10.1.0
+asyncio
+aiohttp==3.9.1
+pydantic==2.5.2
+pytz==2023.3

@@ -33,7 +33,13 @@ class TodoTelegramBot:
         
         logger.info("使用直接Microsoft Graph API客户端")
         
-        self.application = Application.builder().token(Config.TELEGRAM_BOT_TOKEN).build()
+        builder = Application.builder().token(Config.TELEGRAM_BOT_TOKEN)
+        if Config.TELEGRAM_BASE_URL:
+            # 使用自定义的 Telegram Bot API Base URL（例如通过边缘节点/反向代理）
+            builder = builder.base_url(Config.TELEGRAM_BASE_URL)
+            logger.info(f"使用自定义 Telegram Base URL: {Config.TELEGRAM_BASE_URL}")
+        
+        self.application = builder.build()
         
         self.application.add_handler(CommandHandler("start", self.start_command))
         self.application.add_handler(CommandHandler("help", self.help_command))
@@ -399,8 +405,9 @@ class TodoTelegramBot:
             logger.info(f"收到图片消息，格式: {image_format}, 大小: {len(image_bytes)} bytes")
             
             existing_todos = await self.todo_client.list_todos()
+            caption = (update.message.caption or "").strip() if update.message and update.message.caption else None
             
-            analysis = await self.ai_service.analyze_image_for_todos(image_bytes, image_format, existing_todos)
+            analysis = await self.ai_service.analyze_image_for_todos(image_bytes, image_format, existing_todos, caption)
             
             result = await self.execute_action(analysis)
             
@@ -674,8 +681,15 @@ class TodoTelegramBot:
         try:
             status_message = "**令牌状态**\n\n"
             
+            def _mask_tail(value: str, tail_len: int = 8) -> str:
+                if not value:
+                    return "未设置"
+                if len(value) <= tail_len:
+                    return value
+                return f"***{value[-tail_len:]}"
+
             if Config.MS_TODO_ACCESS_TOKEN:
-                status_message += f"访问令牌: {Config.MS_TODO_ACCESS_TOKEN[:20]}...\n"
+                status_message += f"访问令牌: {_mask_tail(Config.MS_TODO_ACCESS_TOKEN)}\n"
             else:
                 status_message += "访问令牌: 未设置\n"
             
@@ -683,7 +697,7 @@ class TodoTelegramBot:
                 if Config.MS_TODO_REFRESH_TOKEN == "client_credentials_flow":
                     status_message += "刷新令牌: 客户端凭据流\n"
                 else:
-                    status_message += f"刷新令牌: {Config.MS_TODO_REFRESH_TOKEN[:20]}...\n"
+                    status_message += f"刷新令牌: {_mask_tail(Config.MS_TODO_REFRESH_TOKEN)}\n"
             else:
                 status_message += "刷新令牌: 未设置\n"
             
@@ -720,13 +734,13 @@ class TodoTelegramBot:
                 if await self._save_tokens_to_env(new_access_token, new_refresh_token):
                     await query.edit_message_text(
                         "**令牌刷新成功！**\n\n"
-                        f"新访问令牌: {new_access_token[:30]}...\n"
+                        f"新访问令牌: ***{new_access_token[-8:]}\n"
                         "已自动保存到配置文件"
                     )
                 else:
                     await query.edit_message_text(
                         "**令牌刷新成功但保存失败**\n\n"
-                        f"新访问令牌: {new_access_token[:30]}...\n"
+                        f"新访问令牌: ***{new_access_token[-8:]}\n"
                         "请联系管理员手动更新配置文件"
                     )
             else:
@@ -875,8 +889,15 @@ class TodoTelegramBot:
         try:
             status_message = "令牌状态\n\n"
             
+            def _mask_tail(value: str, tail_len: int = 8) -> str:
+                if not value:
+                    return "未设置"
+                if len(value) <= tail_len:
+                    return value
+                return f"***{value[-tail_len:]}"
+            
             if Config.MS_TODO_ACCESS_TOKEN:
-                status_message += f"访问令牌: {Config.MS_TODO_ACCESS_TOKEN[:20]}...\n"
+                status_message += f"访问令牌: {_mask_tail(Config.MS_TODO_ACCESS_TOKEN)}\n"
             else:
                 status_message += "访问令牌: 未设置\n"
             
@@ -884,7 +905,7 @@ class TodoTelegramBot:
                 if Config.MS_TODO_REFRESH_TOKEN == "client_credentials_flow":
                     status_message += "刷新令牌: 客户端凭据流\n"
                 else:
-                    status_message += f"刷新令牌: {Config.MS_TODO_REFRESH_TOKEN[:20]}...\n"
+                    status_message += f"刷新令牌: {_mask_tail(Config.MS_TODO_REFRESH_TOKEN)}\n"
             else:
                 status_message += "刷新令牌: 未设置\n"
             
@@ -925,13 +946,13 @@ class TodoTelegramBot:
                 if await self._save_tokens_to_env(new_access_token, new_refresh_token):
                     await update.message.reply_text(
                         "令牌刷新成功！\n\n"
-                        f"新访问令牌: {new_access_token[:30]}...\n"
+                    f"新访问令牌: ***{new_access_token[-8:]}\n"
                         "已自动保存到配置文件"
                     )
                 else:
                     await update.message.reply_text(
                         "令牌刷新成功但保存失败\n\n"
-                        f"新访问令牌: {new_access_token[:30]}...\n"
+                    f"新访问令牌: ***{new_access_token[-8:]}\n"
                         "请联系管理员手动更新配置文件"
                     )
             else:

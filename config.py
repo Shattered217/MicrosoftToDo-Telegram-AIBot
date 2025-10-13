@@ -7,6 +7,7 @@ load_dotenv()
 class Config:
     
     TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+    TELEGRAM_BASE_URL = os.getenv('TELEGRAM_BASE_URL')  # 可选：自定义 Telegram Bot API Base URL（如经由反向代理）
     
     TELEGRAM_ADMIN_IDS = os.getenv('TELEGRAM_ADMIN_IDS', '').split(',') if os.getenv('TELEGRAM_ADMIN_IDS') else []
     TELEGRAM_ADMIN_IDS = [int(id.strip()) for id in TELEGRAM_ADMIN_IDS if id.strip().isdigit()]

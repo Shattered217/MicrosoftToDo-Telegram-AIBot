@@ -78,6 +78,8 @@ pip install -r requirements.txt
 # Telegram Bot Token (从 @BotFather 获取)
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 TELEGRAM_ADMIN_IDS=your_telegram_user_id_here
+# 可选：自定义 Telegram Bot API Base URL（例如通过 EdgeOne/反向代理加速）
+TELEGRAM_BASE_URL=https://your-edgeone-or-proxy.example.com/bot
 
 # OpenAI配置
 OPENAI_API_KEY=your_openai_api_key_here

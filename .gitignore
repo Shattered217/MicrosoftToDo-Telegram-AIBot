@@ -65,6 +65,7 @@ auth_config.json
 coverage.xml
 *.cover
 .hypothesis/
+test_*.py
 
 # Jupyter Notebook
 .ipynb_checkpoints

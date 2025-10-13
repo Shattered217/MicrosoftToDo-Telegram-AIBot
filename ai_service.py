@@ -17,9 +17,12 @@ class AIService:
     
     async def analyze_text_for_todos(self, text: str, existing_todos: List[Dict] = None) -> Dict[str, Any]:
         
-        existing_context = ""
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        existing_context = f"\n\n当前时间：{current_time}"
         if existing_todos:
-            existing_context = f"\n\n当前已有的待办事项：\n" + "\n".join([
+            existing_context += f"\n\n当前已有的待办事项：\n" + "\n".join([
                 f"- {todo.get('title', 'N/A')} (ID: {todo.get('id', 'N/A')}, 状态: {'已完成' if todo.get('completed', False) else '未完成'})"
                 for todo in existing_todos[:10]  # 限制数量避免token过多
             ])
@@ -41,21 +44,12 @@ class AIService:
 - 其他所有情况 → CREATE（默认创建任务）
 
 时间识别规则：
-- 截止日期格式：将相对日期转换为YYYY-MM-DD格式
-  * 今天 → 2025-09-25
-  * 明天 → 2025-09-26  
-  * 后天 → 2025-09-27
-  * 周五 → 2025-09-27（本周或下周的周五）
-  * 9月26日 → 2025-09-26
-  * 本周末 → 2025-09-28
-  * 下周一 → 2025-09-30
 - 尽量从用户输入中提取任何可能的日期信息作为截止日期
 - 提醒时间规则：
   * 如果任务提到具体时间（如"下午3点开会"），提取该时间作为提醒时间
   * 如果只有日期没有时间，根据任务重要性设置合适的提醒时间
   * 重要任务（会议、约会等）：提前1天提醒，时间为09:00
   * 普通任务：当天提醒，时间为09:00
-- 不再提取due_time字段，只关注due_date
 
 请以JSON格式返回，包含：
 - action: 操作类型（CREATE/UPDATE/COMPLETE/DELETE/LIST/SEARCH）
@@ -73,6 +67,7 @@ class AIService:
         user_prompt = f"用户输入：{text}"
         
         try:
+            logger.info(f"开始AI分析，模型: {self.model}")
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -84,13 +79,15 @@ class AIService:
             )
             
             content = response.choices[0].message.content
-            logger.info(f"AI分析结果: {content}")
+            logger.info(f"AI原始响应: {content}")
             
             import json
             try:
                 result = json.loads(content)
+                logger.info(f"JSON解析成功，action={result.get('action')}")
                 return result
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON解析失败: {e}, 原始内容: {content}")
                 return {
                     "action": "CREATE",
                     "title": text[:50] + "..." if len(text) > 50 else text,
@@ -104,7 +101,7 @@ class AIService:
                 }
                 
         except Exception as e:
-            logger.error(f"AI分析失败: {e}")
+            logger.error(f"AI分析失败: {type(e).__name__}: {e}", exc_info=True)
             return {
                 "action": "CREATE",
                 "title": text[:50] + "..." if len(text) > 50 else text,
@@ -117,53 +114,85 @@ class AIService:
                 "confidence": 0.0
             }
     
-    async def analyze_image_for_todos(self, image_data: bytes, image_format: str, existing_todos: List[Dict] = None) -> Dict[str, Any]:
+    async def analyze_image_for_todos(self, image_data: bytes, image_format: str, existing_todos: List[Dict] = None, caption: Optional[str] = None) -> Dict[str, Any]:
         
-        existing_context = ""
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        existing_context = f"\n\n当前时间：{current_time}"
         if existing_todos:
-            existing_context = f"\n\n当前已有的待办事项：\n" + "\n".join([
+            existing_context += f"\n\n当前已有的待办事项：\n" + "\n".join([
                 f"- {todo.get('title', 'N/A')} (ID: {todo.get('id', 'N/A')}, 状态: {'已完成' if todo.get('completed', False) else '未完成'})"
                 for todo in existing_todos[:10]
             ])
         
         image_base64 = base64.b64encode(image_data).decode('utf-8')
         
-        system_prompt = f"""你是一个智能待办事项助手。用户会发送图片，你需要分析图片内容并提取待办事项相关信息。
+        system_prompt = f"""你是一个智能待办事项提取器。用户会发送图片，你需要识别图片中的文字与场景，将其等价视为用户文本输入，并按与文本分析相同的规则抽取待办事项。若提供了图片描述（caption），请将其视为主要参考之一。
 
-请分析图片中的内容，识别文字、物品、场景等，判断用户可能想要创建什么样的待办事项。
+核心原则：
+1. 每条图片信息都应该被解析为至少一个待办事项（除非是明确的操作指令）
+2. 自动识别并提取时间信息（日期、时间、截止时间等）
+3. 提取任务的核心内容作为标题
+4. 将详细信息作为描述
 
-可能的场景包括：
-- 手写的待办清单
-- 会议白板上的任务
-- 购物清单
-- 提醒便签
-- 日程安排
-- 工作计划等
+操作类型判断：
+- 如果包含"完成了"、"做完了"、"标记完成"等词语 → COMPLETE
+- 如果包含"删除"、"取消"、"移除"等词语 → DELETE  
+- 如果包含"修改"、"更新"、"改成"等词语 → UPDATE
+- 如果包含"查看"、"显示"、"列表"等词语 → LIST
+- 如果包含"搜索"、"找"、"查找"等词语 → SEARCH
+- 其他所有情况 → CREATE（默认创建任务）
 
-请以JSON格式返回分析结果，包含以下字段：
-- action: 通常是CREATE（从图片创建待办事项）
-- items: 从图片中提取的待办事项列表，每个包含title和description
+时间识别规则：
+- 尽量从识别到的内容中提取任何可能的日期信息作为截止日期
+- 提醒时间规则：
+  * 如果任务提到具体时间（如"下午3点开会"），提取该时间作为提醒时间
+  * 如果只有日期没有时间，根据任务重要性设置合适的提醒时间
+  * 重要任务（会议、约会等）：提前1天提醒，时间为09:00
+  * 普通任务：当天提醒，时间为09:00
+
+请以严格的JSON格式返回，字段要求与文本分析完全对齐：
+- action: 操作类型（CREATE/UPDATE/COMPLETE/DELETE/LIST/SEARCH）
+- title: 任务标题（简洁明了）
+- description: 详细描述（包含所有相关信息，来源于图片识别）
+- due_date: 截止日期（YYYY-MM-DD格式，尽量提取任何可能的日期信息）
+- reminder_date: 提醒日期（YYYY-MM-DD格式，根据任务重要性设置）
+- reminder_time: 提醒时间（HH:MM格式，根据任务具体时间或重要性设置）
+- search_query: 搜索关键词（仅SEARCH操作）
+- todo_id: 待办事项ID（仅UPDATE/COMPLETE/DELETE操作，如果提到具体ID）
 - confidence: 置信度（0-1）
-- reasoning: 分析推理过程
-- image_description: 图片内容描述
+
+可选扩展字段（如果从图片中提取到多个事项）：
+- items: 待办事项数组，元素包含 title、description、due_date、reminder_date、reminder_time
+- image_description: 图片内容简要描述
+- reasoning: 关键识别依据（简要说明）
+
+只返回JSON，不要包含任何解释性文本或前后缀。
 
 {existing_context}"""
         
         try:
+            user_parts = []
+            if caption:
+                user_parts.append({
+                    "type": "text",
+                    "text": f"图片描述：{caption}"
+                })
+            user_parts.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/{image_format};base64,{image_base64}"
+                }
+            })
+
             response = self.client.chat.completions.create(
                 model=Config.OPENAI_VL_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {
                         "role": "user",
-                        "content": [
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/{image_format};base64,{image_base64}"
-                                }
-                            }
-                        ]
+                        "content": user_parts
                     }
                 ],
                 temperature=0.3,

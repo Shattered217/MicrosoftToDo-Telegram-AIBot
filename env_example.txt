@@ -1,16 +1,16 @@
 # Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+#TELEGRAM_BASE_URL=https://your-edgeone-or-proxy.example.com/bot  # 可选：自定义 Telegram Bot API Base URL
 
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.siliconflow.cn/v1
+OPENAI_MODEL=Qwen/Qwen3-Next-80B-A3B-Instruct
 
 # Vision-Language Model for Image Analysis
-OPENAI_VL_MODEL=gpt-4o
+OPENAI_VL_MODEL=zai-org/GLM-4.5V
 # 其他VL模型选项：
 # OPENAI_VL_MODEL=gpt-4-vision-preview
-# OPENAI_VL_MODEL=gpt-4o-mini  # 如果支持图片的话
 
 # Microsoft Todo Authentication
 MS_TODO_ACCESS_TOKEN=your_access_token_here

@@ -3,6 +3,10 @@ import logging
 from io import BytesIO
 from typing import Optional
 from telegram import Update, Bot, ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, KeyboardButton
+try:
+    from telegram import ReactionTypeEmoji  # Bot API >= 6.7 / PTB >= 21.x
+except Exception:
+    ReactionTypeEmoji = None  # 兼容旧版本，运行时判定
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from PIL import Image
 import requests
@@ -73,6 +77,31 @@ class TodoTelegramBot:
     
     def _is_admin(self, user_id: int) -> bool:
         return user_id in self.admin_ids
+    
+    async def _react(self, context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, emoji: str):
+        """对消息添加表态（reaction）。"""
+        # 映射到 Telegram 支持的标准 reaction 表情
+        emoji_map = {'🤖': '👍', '🖼️': '🔥'}
+        reaction_emoji = emoji_map.get(emoji, '👍')
+        
+        # 构建 API URL（兼容自定义 Base URL）
+        base = (Config.TELEGRAM_BASE_URL or "https://api.telegram.org/bot").rstrip('/')
+        if base.endswith('/bot'):
+            base = base[:-4]
+        url = f"{base}/bot{Config.TELEGRAM_BOT_TOKEN}/setMessageReaction"
+        
+        # 发送表态请求
+        try:
+            payload = {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "reaction": [{"type": "emoji", "emoji": reaction_emoji}],
+            }
+            resp = requests.post(url, json=payload, timeout=5)
+            if resp.status_code >= 400:
+                logger.warning(f"表态失败 [{resp.status_code}]: {resp.text}")
+        except Exception as e:
+            logger.debug(f"表态异常: {e}")
     
     async def _check_admin_permission(self, update: Update) -> bool:
         user_id = update.effective_user.id
@@ -357,7 +386,8 @@ class TodoTelegramBot:
             if await self._handle_keyboard_button(update, context, user_text):
                 return
             
-            processing_message = await update.message.reply_text("正在分析您的消息...")
+            # 对消息进行表态（reaction）而非回复表情
+            await self._react(context, update.effective_chat.id, update.message.message_id, '🤖')
             
             existing_todos = await self.todo_client.list_todos()
             
@@ -367,7 +397,8 @@ class TodoTelegramBot:
             
             response = await self.ai_service.generate_response(analysis, result)
             
-            await processing_message.edit_text(response)
+            # 处理完成后发送新的一条消息
+            await update.message.reply_text(response)
             
         except Exception as e:
             logger.error(f"处理文本消息失败: {e}")
@@ -378,13 +409,14 @@ class TodoTelegramBot:
             return
             
         try:
-            processing_message = await update.message.reply_text("正在分析图片内容...")
+            # 对消息进行表态（reaction）而非回复表情
+            await self._react(context, update.effective_chat.id, update.message.message_id, '🖼️')
             
             photo = update.message.photo[-1]
             file = await photo.get_file()
             
             if file.file_size > Config.MAX_IMAGE_SIZE:
-                await processing_message.edit_text("图片文件过大，请发送小于5MB的图片。")
+                await update.message.reply_text("图片文件过大，请发送小于5MB的图片。")
                 return
             
             image_data = BytesIO()
@@ -399,7 +431,7 @@ class TodoTelegramBot:
                 pass
             
             if image_format not in Config.ALLOWED_IMAGE_FORMATS:
-                await processing_message.edit_text("不支持的图片格式。支持的格式：jpg, jpeg, png, gif, webp")
+                await update.message.reply_text("不支持的图片格式。支持的格式：jpg, jpeg, png, gif, webp")
                 return
             
             logger.info(f"收到图片消息，格式: {image_format}, 大小: {len(image_bytes)} bytes")
@@ -413,7 +445,8 @@ class TodoTelegramBot:
             
             response = await self.ai_service.generate_response(analysis, result)
             
-            await processing_message.edit_text(response)
+            # 处理完成后发送新的一条消息
+            await update.message.reply_text(response)
             
         except Exception as e:
             logger.error(f"处理图片消息失败: {e}")

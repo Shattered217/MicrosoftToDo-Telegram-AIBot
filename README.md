@@ -5,17 +5,20 @@
 ## 功能特性
 
 ### 智能语义分析
+
 - 使用 ChatGPT API 分析用户输入的自然语言
 - 自动识别用户意图（创建、更新、完成、删除、查询待办事项）
 - 支持模糊匹配和智能推理
 
 ### Telegram Bot 交互
+
 - 友好的中文界面
 - 支持文本消息处理
 - 支持图片识别（手写清单、白板、便签等）
 - 丰富的命令支持
 
 ### 完整的待办事项管理
+
 - 创建新的待办事项
 - 查看所有/活跃的待办事项
 - 更新现有任务内容
@@ -25,6 +28,7 @@
 - 生成待办事项摘要
 
 ### Microsoft Todo 集成
+
 - 直接与 Microsoft Graph API 集成
 - 支持个人和工作/学校账户
 - 实时与 Microsoft To Do 同步
@@ -35,6 +39,7 @@
 ## 快速开始
 
 ### 1. 环境要求
+
 - Python 3.8+
 - Telegram Bot Token
 - OpenAI API Key
@@ -42,15 +47,17 @@
 - Azure 应用注册（用于 Microsoft Graph API 访问）
 
 ### 2. 安装依赖
+
 ```bash
-git clone https://github.com/your-username/ToDoMCP.git
-cd ToDoMCP
+git clone https://github.com/Shattered217/MicrosoftToDo-Telegram-AIBot.git
+cd MicrosoftToDo-Telegram-AIBot
 pip install -r requirements.txt
 ```
 
 ### 3. Azure 应用注册设置
 
 #### 创建 Azure 应用注册
+
 1. 访问 [Azure Portal](https://portal.azure.com)
 2. 搜索并进入"应用注册"
 3. 点击"新注册"
@@ -60,7 +67,8 @@ pip install -r requirements.txt
    - 重定向 URI：`http://localhost:3000/callback`
 
 #### 配置 API 权限
-1. 在应用页面，点击"API权限"
+
+1. 在应用页面，点击"API 权限"
 2. 点击"添加权限"
 3. 选择"Microsoft Graph"
 4. 选择"委托的权限"
@@ -72,6 +80,7 @@ pip install -r requirements.txt
 6. 点击"授予管理员同意"（如果可用）
 
 ### 4. 配置环境变量
+
 复制 `env_example.txt` 为 `.env` 并填写配置：
 
 ```env
@@ -98,11 +107,13 @@ TIMEZONE=Asia/Shanghai
 ```
 
 ### 5. 获取 Microsoft Todo 访问令牌
+
 ```bash
 python3 get_tokens.py
 ```
 
 ### 6. 运行程序
+
 ```bash
 python3 main.py
 ```
@@ -110,6 +121,7 @@ python3 main.py
 ## 使用方法
 
 ### 基本命令
+
 - `/start` - 开始使用 Bot
 - `/help` - 获取帮助信息
 - `/menu` - 显示主菜单
@@ -118,6 +130,7 @@ python3 main.py
 - `/summary` - 获取待办事项摘要
 
 ### 令牌管理命令
+
 - `/token_status` - 查看当前令牌状态和连接测试
 - `/refresh_token` - 刷新访问令牌
 - `/get_auth_link` - 获取授权链接重新授权
@@ -125,27 +138,34 @@ python3 main.py
 ### 自然语言交互
 
 #### 创建待办事项
+
 - "明天要开会讨论项目进度"
 - "买牛奶、面包和鸡蛋"
 - "提醒我下周五交报告"
 
 #### 完成任务
+
 - "完成了买牛奶的任务"
 - "开会任务做完了"
 
 #### 更新任务
+
 - "把买牛奶改成买酸奶"
-- "更新会议时间为下午3点"
+- "更新会议时间为下午 3 点"
 
 #### 搜索和查询
+
 - "找一下关于会议的任务"
 - "显示所有购物相关的待办事项"
 
 #### 删除任务
+
 - "删除买牛奶的任务"
 
 ### 图片识别
+
 支持识别以下类型的图片内容：
+
 - 手写的待办清单
 - 会议白板上的任务
 - 购物清单
@@ -155,32 +175,8 @@ python3 main.py
 
 只需发送图片，Bot 会自动识别并创建相应的待办事项。
 
-## 使用示例
-
-### 通过Telegram Bot创建待办事项
-
-以下示例展示了如何通过Telegram Bot与Microsoft To Do进行交互：
-
-#### 示例1：通过消息创建待办事项
-<img width="895" height="467" alt="image" src="https://github.com/user-attachments/assets/18205277-5d2e-4b11-974b-81426fbdde0e" />
-
-
-*通过发送消息"通义大模型的研究和应用走向生成式人工智能"，Bot自动识别并创建了相应的待办事项，包含详细的时间、地点等信息。*
-
-#### 示例2：Microsoft To Do同步效果
-<img width="2270" height="901" alt="image" src="https://github.com/user-attachments/assets/86ee10d0-f205-406d-8a08-c4e02fd0c780" />
-
-
-*创建的待办事项会自动同步到Microsoft To Do中，包含完整的任务详情和提醒设置。*
-
-### 主要特性展示
-- 智能语义分析：自动从自然语言中提取任务信息
-- 实时同步：Telegram Bot与Microsoft To Do双向同步
-- 丰富信息：支持时间、地点、描述等详细信息
-- 提醒功能：自动设置提醒时间
-- 修改功能（尚未实现）
-
 ## 项目结构
+
 ```
 ToDoMCP/
 ├── main.py                    # 主程序入口
@@ -199,6 +195,7 @@ ToDoMCP/
 ```
 
 ## 技术架构
+
 1. **Telegram Bot** - 处理用户输入和交互
 2. **AI Service** - 使用 ChatGPT 进行语义分析
 3. **Microsoft Graph Client** - 直接与 Microsoft Graph API 通信
@@ -207,72 +204,39 @@ ToDoMCP/
 
 ## 令牌管理
 
-### 通过Telegram Bot管理令牌（推荐）
+### 通过 Telegram Bot 管理令牌（推荐）
 
 #### 1. 查看令牌状态：`/token_status`
+
 - 显示当前访问令牌和刷新令牌状态
-- 自动测试与Microsoft To-Do的连接
+- 自动测试与 Microsoft To-Do 的连接
 - 显示账户类型（个人/工作学校）
 
 #### 2. 刷新过期令牌：`/refresh_token`
+
 - 使用现有刷新令牌获取新的访问令牌
 - 自动保存到服务器配置文件
 - 适用于令牌未完全过期的情况
 
 #### 3. 重新授权：`/get_auth_link`
-- 获取Microsoft登录授权链接
-- 登录后复制授权码发送给Bot
+
+- 获取 Microsoft 登录授权链接
+- 登录后复制授权码发送给 Bot
 - 自动获取新的访问令牌和刷新令牌
-
-## 故障排除
-
-### 常见问题
-
-1. **Bot 无法启动**
-   - 检查 Telegram Bot Token 是否正确
-   - 确认网络连接正常
-   - 检查管理员ID是否设置
-
-2. **Microsoft Todo 连接失败**
-   - 运行 `python3 test_tokens.py` 检查令牌有效性
-   - 检查 Azure 应用权限是否正确配置
-   - 确认访问令牌未过期
-
-3. **令牌获取失败**
-   - 检查 Azure 应用注册配置
-   - 确认重定向 URI 为 `http://localhost:3000/callback`
-   - 验证是否启用了"公共客户端流"
-
-4. **AI 分析失败**
-   - 检查 OpenAI API Key 是否有效
-   - 确认 API Base URL 设置正确
-   - 检查账户余额是否充足
-
-### 测试和调试
-```bash
-# 测试令牌有效性
-python3 test_tokens.py
-
-# 刷新现有令牌
-python3 refresh_tokens.py
-
-# 重新获取令牌
-python3 get_tokens.py
-
-# 查看详细日志
-tail -f bot.log
-```
 
 ## 部署说明
 
 ### 本地部署
+
 按照快速开始部分的步骤即可在本地运行。
 
 ### 服务器部署
+
 1. 将项目上传到服务器
-2. 安装Python依赖
+2. 安装 Python 依赖
 3. 配置环境变量
 4. 使用 `screen` 或 `tmux` 在后台运行：
+
 ```bash
 screen -S todobot
 python3 main.py
@@ -280,6 +244,7 @@ python3 main.py
 ```
 
 ### Docker 部署（可选）
+
 ```bash
 # 构建镜像
 docker build -t todobot .
@@ -289,9 +254,11 @@ docker run -d --name todobot --env-file .env todobot
 ```
 
 ## 许可证
+
 MIT License
 
 ## 相关链接
+
 - [Microsoft Graph API](https://docs.microsoft.com/en-us/graph/api/resources/todo-overview)
 - [Azure App Registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 - [Telegram Bot API](https://core.telegram.org/bots/api)

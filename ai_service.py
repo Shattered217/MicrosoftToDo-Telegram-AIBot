@@ -237,15 +237,52 @@ class AIService:
 - 简洁明了，不超过100字
 - 语气友好自然
 - 确认用户的操作结果
-- 如果操作失败，提供简单的建议"""
+- 如果操作失败，提供简单的建议
+- 必须与提供的结构化字段保持一致，特别是日期/时间/任务标题等关键信息，不要编造未提供的信息
+- 如果存在提醒或截止日期，请在回复中自然体现
+"""
+
+            from datetime import datetime
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+            # 提取关键字段，便于模型对齐生成
+            title = analysis_result.get("title")
+            description = analysis_result.get("description")
+            due_date = analysis_result.get("due_date")
+            reminder_date = analysis_result.get("reminder_date")
+            reminder_time = analysis_result.get("reminder_time")
+            search_query = analysis_result.get("search_query")
+            todo_id = analysis_result.get("todo_id")
+            items = analysis_result.get("items")
+            items_count = len(items) if isinstance(items, list) else 0
+
+            field_lines = [
+                f"- title: {title}",
+                f"- description: {description}",
+                f"- due_date: {due_date}",
+                f"- reminder_date: {reminder_date}",
+                f"- reminder_time: {reminder_time}",
+                f"- search_query: {search_query}",
+                f"- todo_id: {todo_id}",
+                f"- items_count: {items_count}",
+            ]
+            fields_block = "\n".join(field_lines)
 
             user_prompt = f"""
+当前时间: {current_time}
 操作类型: {action}
 分析置信度: {confidence}
-操作结果: {str(operation_result)}
-分析推理: {analysis_result.get('reasoning', '')}
 
-请生成一个友好的回复。"""
+结构化字段（请严格对齐生成，不要编造）：
+{fields_block}
+
+操作结果对象（字符串化）：
+{str(operation_result)}
+
+分析推理:
+{analysis_result.get('reasoning', '')}
+
+请基于上述字段生成一个友好的、与字段一致的中文回复（不超过100字）。"""
 
             response = self.client.chat.completions.create(
                 model=self.model,

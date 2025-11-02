@@ -93,8 +93,8 @@ TELEGRAM_BASE_URL=https://your-edgeone-or-proxy.example.com/bot
 # OpenAI配置
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_BASE_URL=https://api.siliconflow.cn/v1
-OPENAI_MODEL=Qwen/Qwen3-Next-80B-A3B-Instruct
-OPENAI_VL_MODEL=zai-org/GLM-4.5V
+OPENAI_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507
+OPENAI_VL_MODEL=Qwen/Qwen3-VL-32B-Instruct
 
 # Microsoft Todo 应用注册信息（从Azure获取）
 MS_TODO_CLIENT_ID=your_client_id_here

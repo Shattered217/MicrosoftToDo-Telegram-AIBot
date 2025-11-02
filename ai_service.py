@@ -1,7 +1,7 @@
 import base64
 import logging
 from typing import Dict, Any, Optional, List
-from openai import OpenAI
+from openai import AsyncOpenAI
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 class AIService:
     
     def __init__(self):
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=Config.OPENAI_API_KEY,
-            base_url=Config.OPENAI_BASE_URL
+            base_url=Config.OPENAI_BASE_URL,
+            timeout=60.0  # 60秒超时
         )
         self.model = Config.OPENAI_MODEL
     
@@ -68,13 +69,13 @@ class AIService:
         
         try:
             logger.info(f"开始AI分析，模型: {self.model}")
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.3,
+                temperature=1.0,
                 max_tokens=1000
             )
             
@@ -82,12 +83,23 @@ class AIService:
             logger.info(f"AI原始响应: {content}")
             
             import json
+            import re
+            
+            # 清理可能的 markdown 代码块标记
+            content_cleaned = content.strip()
+            if content_cleaned.startswith("```"):
+                # 移除开头的 ```json 或 ```
+                content_cleaned = re.sub(r'^```(?:json)?\s*\n?', '', content_cleaned)
+                # 移除结尾的 ```
+                content_cleaned = re.sub(r'\n?```\s*$', '', content_cleaned)
+                logger.info(f"清理后的内容: {content_cleaned}")
+            
             try:
-                result = json.loads(content)
+                result = json.loads(content_cleaned)
                 logger.info(f"JSON解析成功，action={result.get('action')}")
                 return result
             except json.JSONDecodeError as e:
-                logger.error(f"JSON解析失败: {e}, 原始内容: {content}")
+                logger.error(f"JSON解析失败: {e}, 清理后内容: {content_cleaned}")
                 return {
                     "action": "CREATE",
                     "title": text[:50] + "..." if len(text) > 50 else text,
@@ -186,7 +198,7 @@ class AIService:
                 }
             })
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=Config.OPENAI_VL_MODEL,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -195,7 +207,7 @@ class AIService:
                         "content": user_parts
                     }
                 ],
-                temperature=0.3,
+                temperature=1.0,
                 max_tokens=1500
             )
             
@@ -203,16 +215,28 @@ class AIService:
             logger.info(f"图片AI分析结果: {content}")
             
             import json
+            import re
+            
+            # 清理可能的 markdown 代码块标记
+            content_cleaned = content.strip()
+            if content_cleaned.startswith("```"):
+                # 移除开头的 ```json 或 ```
+                content_cleaned = re.sub(r'^```(?:json)?\s*\n?', '', content_cleaned)
+                # 移除结尾的 ```
+                content_cleaned = re.sub(r'\n?```\s*$', '', content_cleaned)
+                logger.info(f"清理后的图片分析内容: {content_cleaned}")
+            
             try:
-                result = json.loads(content)
+                result = json.loads(content_cleaned)
                 return result
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                logger.error(f"图片JSON解析失败: {e}, 清理后内容: {content_cleaned}")
                 return {
                     "action": "CREATE",
-                    "items": [{"title": "图片待办事项", "description": content}],
+                    "items": [{"title": "图片待办事项", "description": content_cleaned}],
                     "confidence": 0.5,
                     "reasoning": "无法解析AI响应为JSON格式",
-                    "image_description": content
+                    "image_description": content_cleaned
                 }
                 
         except Exception as e:
@@ -284,13 +308,13 @@ class AIService:
 
 请基于上述字段生成一个友好的、与字段一致的中文回复（不超过100字）。"""
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
-                temperature=0.7,
+                temperature=1.0,
                 max_tokens=200
             )
             

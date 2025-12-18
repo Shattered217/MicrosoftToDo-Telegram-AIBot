@@ -160,43 +160,57 @@ class AIService:
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # 构建上下文（使用缓存避免重复传输）
-        existing_context = f"\n\n当前时间：{current_time}"
-        if existing_todos and len(existing_todos) > 0:
-            # 只传最近的5个未完成任务，减少token消耗
-            active_todos = [t for t in existing_todos if not t.get('completed', False)][:5]
-            if active_todos:
-                existing_context += f"\n\n当前未完成的待办事项（供参考，避免重复）：\n" + "\n".join([
-                    f"- {todo.get('title', 'N/A')}"
-                    for todo in active_todos
-                ])
+        # 1. 第一步：意图分析
+        intent_analysis = await self._analyze_intent(text, current_time)
         
-        system_prompt = f"""你是一个智能待办事项提取器。将用户文本转换为结构化的待办事项数据。
+        # 如果是查询或创建，或者明确包含ID，直接返回初步结果
+        if intent_analysis.get('action') in ['CREATE', 'LIST', 'SEARCH'] or intent_analysis.get('todo_id'):
+            return intent_analysis
+            
+        # 2. 第二步：任务匹配（仅针对 UPDATE/COMPLETE/DELETE 且缺失 ID 的情况）
+        if intent_analysis.get('action') in ['UPDATE', 'COMPLETE', 'DELETE']:
+            # 获取所有未完成任务用于匹配
+            candidates = [t for t in (existing_todos or []) if not t.get('completed', False)]
+            
+            if not candidates:
+                return intent_analysis  # 没有候选任务，无法匹配
+                
+            resolved_result = await self._resolve_task_id_and_details(
+                user_text=text,
+                initial_analysis=intent_analysis,
+                candidates=candidates
+            )
+            return resolved_result
+            
+        return intent_analysis
+
+    async def _analyze_intent(self, text: str, current_time: str) -> Dict[str, Any]:
+        """第一步：分析用户意图"""
+        system_prompt = f"""你是一个智能待办事项意图分析器。分析用户输入的操作类型和关键信息。
 
 核心原则：
-1. 每条消息解析为至少一个待办事项（除非是明确的操作指令）
-2. 自动识别和提取时间信息
-3. 提取任务核心内容作为标题（简洁，10字以内）
-4. 详细信息作为描述
+1. 识别操作类型 (action)
+2. 提取用户提到的任务关键描述 (target_description)
+3. 提取修改后的新信息 (modification_intent)
+4. 提取时间信息
 
 {self._get_action_rules()}
 
 {self._get_common_time_rules(current_time)}
 
-**输出格式：严格的JSON对象，不包含任何markdown标记或解释文本**
+**输出格式：严格的JSON对象**
 
 必需字段：
 - action: CREATE/UPDATE/COMPLETE/DELETE/LIST/SEARCH
-- title: 任务标题（简洁明了，10字内）
+- title: 如果是CREATE，为任务标题；如果是其他操作，提取用户描述的任务特征
 - description: 详细描述
-- due_date: YYYY-MM-DD格式或null
-- reminder_date: YYYY-MM-DD格式或null
-- reminder_time: HH:MM格式或null
-- search_query: 搜索关键词（仅SEARCH）或空字符串
-- todo_id: 任务ID（仅UPDATE/COMPLETE/DELETE）或空字符串
-- confidence: 0-1之间的数字
-
-{existing_context}"""
+- due_date, reminder_date, reminder_time: 日期时间
+- search_query: 搜索关键词
+- todo_id: 如果用户明确提供了ID（极少见），否则留空
+- target_description: 用户用来指代目标任务的描述（如"买牛奶那个任务" -> "买牛奶"）
+- modification_intent: 如果是修改，用户想要改成什么
+- confidence: 0-1
+"""
 
         user_prompt = f"用户输入：{text}"
         
@@ -204,59 +218,100 @@ class AIService:
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
-                logger.info(f"AI分析（尝试 {attempt + 1}/{max_retries + 1}），模型: {self.model}")
-                
                 response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.3,  # 降低temperature以获得更稳定的结构化输出
+                    temperature=0.3,
                     max_tokens=800,
                     response_format={"type": "json_object"} if "gpt-4" in self.model.lower() else None
                 )
                 
                 content = response.choices[0].message.content
-                logger.info(f"AI原始响应: {content[:200]}...")
-                
-                # 健壮的JSON解析
                 result = self._robust_json_parse(content)
                 
                 if result:
-                    # 验证并修正日期
                     result = self._validate_and_fix_dates(result)
-                    logger.info(f"JSON解析成功，action={result.get('action')}, title={result.get('title')}")
                     return result
-                else:
-                    if attempt < max_retries:
-                        logger.warning(f"JSON解析失败，将重试...")
-                        continue
-                    else:
-                        raise ValueError("无法解析AI响应为有效JSON")
-                        
+                    
             except Exception as e:
-                if attempt < max_retries:
-                    logger.warning(f"AI调用失败（尝试 {attempt + 1}），将重试: {e}")
-                    await asyncio.sleep(1)  # 短暂延迟后重试
-                    continue
-                else:
-                    logger.error(f"AI分析失败（所有重试已用尽）: {type(e).__name__}: {e}", exc_info=True)
+                logger.warning(f"意图分析失败 (尝试 {attempt+1}): {e}")
+                if attempt == max_retries:
                     break
+                await asyncio.sleep(1)
         
-        # 所有尝试失败，返回fallback
+        # Fallback
         return {
             "action": "CREATE",
-            "title": text[:30] + "..." if len(text) > 30 else text,
-            "description": text,
-            "due_date": None,
-            "reminder_date": None,
-            "reminder_time": None,
-            "search_query": "",
-            "todo_id": "",
-            "confidence": 0.0,
-            "reasoning": "AI服务暂时不可用，已创建基础任务"
+            "title": text[:30],
+            "confidence": 0.0
         }
+
+    async def _resolve_task_id_and_details(self, user_text: str, initial_analysis: Dict[str, Any], candidates: List[Dict]) -> Dict[str, Any]:
+        """第二步：根据候选列表匹配确切任务"""
+        from datetime import datetime
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        # 构建候选列表字符串
+        candidates_str = "\n".join([
+            f"- [ID: {t['id']}] {t.get('title', '无标题')} (创建于: {t.get('createdDateTime', '未知')})"
+            for t in candidates
+        ])
+        
+        system_prompt = f"""你是一个智能任务匹配助手。你的任务是根据用户输入和意图，从候选任务列表中找到最匹配的任务，并生成最终的操作参数。
+
+当前时间：{current_time}
+
+候选任务列表：
+{candidates_str}
+
+用户原始输入：{user_text}
+初步意图分析：{initial_analysis.get('action')} - {initial_analysis.get('target_description')}
+
+任务：
+1. **匹配任务**：基于用户的描述（"{initial_analysis.get('target_description', '')}"），在候选列表中找到最匹配的任务ID。
+2. **生成参数**：
+    - 如果是UPDATE：结合用户的修改意图（"{initial_analysis.get('modification_intent', '')}"），生成更新后的title/due_date等。保留不修改的字段为null。
+    - 如果是COMPLETE/DELETE：只需返回ID。
+
+**输出格式：严格的JSON对象**
+
+字段：
+- todo_id: 匹配到的任务ID（必需，如果在列表中找到）
+- action: 保持原操作类型（UPDATE/COMPLETE/DELETE），或者如果有歧义转为SEARCH
+- title: 更新后的标题（仅UPDATE）
+- due_date, reminder_date, reminder_time: 更新后的时间
+- confidence: 匹配置信度 (0-1)
+- reasoning: 匹配理由
+
+如果没有匹配的任务，返回todo_id为null，action可能转为CREATE或SEARCH。
+"""
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system_prompt}],
+                temperature=0.4, # 稍微高一点以便模糊匹配
+                max_tokens=800,
+                response_format={"type": "json_object"} if "gpt-4" in self.model.lower() else None
+            )
+            
+            content = response.choices[0].message.content
+            logger.info(f"任务匹配结果: {content[:200]}...")
+            
+            result = self._robust_json_parse(content)
+            if result:
+                # 合并结果：使用第二步的ID和参数，但保留第一步的其他有用信息作为后备
+                final_result = initial_analysis.copy()
+                final_result.update(result)
+                return self._validate_and_fix_dates(final_result)
+                
+        except Exception as e:
+            logger.error(f"任务匹配失败: {e}")
+            
+        return initial_analysis
     
     def _compress_image_if_needed(self, image_data: bytes, max_size: int = 1024*1024) -> bytes:
         """如果图片过大则压缩"""

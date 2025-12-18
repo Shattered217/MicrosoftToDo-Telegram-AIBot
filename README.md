@@ -253,6 +253,13 @@ docker build -t todobot .
 docker run -d --name todobot --env-file .env todobot
 ```
 
+### CI/CD 自动部署 (推荐)
+
+本项目支持通过 GitHub Actions 进行自动部署。
+
+1.  **工作流**: 代码推送到 `main` 分支 -> GitHub Actions 自动连接服务器 -> 拉取最新代码 -> 使用 `uv` 安装依赖 -> 重启 Systemd 服务。
+2.  **配置方法**: 请查看 [SERVER_SETUP.md](SERVER_SETUP.md) 获取详细的服务器配置和密钥设置指南。
+
 ## 许可证
 
 MIT License

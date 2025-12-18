@@ -1,0 +1,16 @@
+[Unit]
+Description=Telegram Bot Service
+After=network.target
+
+[Service]
+# 修改为您的用户名
+User=root
+# 修改为您项目的实际路径
+WorkingDirectory=/path/to/your/project
+# 指向 .venv 中的 python 可执行文件
+ExecStart=/path/to/your/project/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

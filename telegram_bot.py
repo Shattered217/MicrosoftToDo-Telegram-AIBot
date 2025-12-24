@@ -966,6 +966,9 @@ class TodoTelegramBot:
 
             await query.edit_message_text(message)
 
+            # 在后台延迟清理会话（不依赖 job_queue）
+            asyncio.create_task(self._delayed_cleanup_auth_session(user_id, 600))
+
         except Exception as e:
             logger.error(f"生成授权链接失败: {e}")
             await query.edit_message_text(f"生成授权链接失败: {str(e)}")
@@ -1020,15 +1023,22 @@ class TodoTelegramBot:
                         todo_id = search_results[0].get("id", "")
 
                 if todo_id:
-                    # 执行更新操作
-                    return await self.todo_client.update_todo(
-                        todo_id=todo_id,
-                        title=analysis.get("title"),
-                        description=analysis.get("description"),
-                        due_date=analysis.get("due_date"),
-                        reminder_date=analysis.get("reminder_date"),
-                        reminder_time=analysis.get("reminder_time"),
-                    )
+                    # 只传递非空字段
+                    update_params = {"todo_id": todo_id}
+                    
+                    if analysis.get("title"):
+                        update_params["title"] = analysis.get("title")
+                    if analysis.get("description"):
+                        update_params["description"] = analysis.get("description")
+                    if analysis.get("due_date"):
+                        update_params["due_date"] = analysis.get("due_date")
+                    if analysis.get("reminder_date"):
+                        update_params["reminder_date"] = analysis.get("reminder_date")
+                    if analysis.get("reminder_time"):
+                        update_params["reminder_time"] = analysis.get("reminder_time")
+                    
+                    logger.info(f"更新任务参数: {update_params}")
+                    return await self.todo_client.update_todo(**update_params)
                 else:
                     return {"error": "未找到要更新的待办事项"}
 
@@ -1221,12 +1231,14 @@ class TodoTelegramBot:
 
             await update.message.reply_text(message)
 
-            context.job_queue.run_once(
-                self._cleanup_auth_session,
-                600,
-                data=user_id,
-                name=f"cleanup_auth_{user_id}",
-            )
+            # 设置清理任务（如果 job_queue 可用）
+            if context.job_queue:
+                context.job_queue.run_once(
+                    self._cleanup_auth_session,
+                    600,
+                    data=user_id,
+                    name=f"cleanup_auth_{user_id}",
+                )
 
         except Exception as e:
             logger.error(f"生成授权链接失败: {e}")
@@ -1382,7 +1394,15 @@ class TodoTelegramBot:
             return False
 
     async def _cleanup_auth_session(self, context: ContextTypes.DEFAULT_TYPE):
+        """job_queue 调用的清理方法"""
         user_id = context.job.data
+        if user_id in self.pending_auth:
+            del self.pending_auth[user_id]
+            logger.info(f"清理过期的授权会话: {user_id}")
+    
+    async def _delayed_cleanup_auth_session(self, user_id: int, delay: int):
+        """延迟清理授权会话（不依赖 job_queue）"""
+        await asyncio.sleep(delay)
         if user_id in self.pending_auth:
             del self.pending_auth[user_id]
             logger.info(f"清理过期的授权会话: {user_id}")

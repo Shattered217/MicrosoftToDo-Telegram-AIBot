@@ -202,14 +202,18 @@ class AIService:
 
 必需字段：
 - action: CREATE/UPDATE/COMPLETE/DELETE/LIST/SEARCH
-- title: 如果是CREATE，为任务标题；如果是其他操作，提取用户描述的任务特征
-- description: 详细描述
-- due_date, reminder_date, reminder_time: 日期时间
+- title: 如果是CREATE，为任务标题；如果是UPDATE/COMPLETE/DELETE，为用于搜索的关键词（不是新标题！）
+- description: 详细描述（仅CREATE）
+- due_date, reminder_date, reminder_time: 仅CREATE时填写，UPDATE时留空
 - search_query: 搜索关键词
 - todo_id: 如果用户明确提供了ID（极少见），否则留空
-- target_description: 用户用来指代目标任务的描述（如"买牛奶那个任务" -> "买牛奶"）
-- modification_intent: 如果是修改，用户想要改成什么
+- target_description: 用户用来指代目标任务的描述（如"把跑步时间改为下午2点" -> "跑步"）
+- modification_intent: 如果是UPDATE，描述要修改什么（如"把跑步时间改为下午2点" -> "时间改为下午2点"）
 - confidence: 0-1
+
+UPDATE示例：
+输入："把跑步时间修改为下午2点"
+输出：{"action": "UPDATE", "title": "跑步", "target_description": "跑步", "modification_intent": "时间改为下午2点", ...}
 """
 
         user_prompt = f"用户输入：{text}"
@@ -272,8 +276,14 @@ class AIService:
 
 任务：
 1. **匹配任务**：基于用户的描述（"{initial_analysis.get('target_description', '')}"），在候选列表中找到最匹配的任务ID。
-2. **生成参数**：
-    - 如果是UPDATE：结合用户的修改意图（"{initial_analysis.get('modification_intent', '')}"），生成更新后的title/due_date等。保留不修改的字段为null。
+2. **生成更新参数**：
+    - 如果是UPDATE：
+      * 分析修改意图："{initial_analysis.get('modification_intent', '')}"
+      * 只输出需要修改的字段！
+      * 如果只修改时间，title 必须为 null
+      * 如果只修改标题，时间字段必须为 null
+      * 例如："把跑步时间改为下午2点" -> {{"title": null, "reminder_time": "14:00"}}
+      * 例如："把任务改名为跑步锻炼" -> {{"title": "跑步锻炼", "reminder_time": null}}
     - 如果是COMPLETE/DELETE：只需返回ID。
 
 **输出格式：严格的JSON对象**
@@ -281,12 +291,14 @@ class AIService:
 字段：
 - todo_id: 匹配到的任务ID（必需，如果在列表中找到）
 - action: 保持原操作类型（UPDATE/COMPLETE/DELETE），或者如果有歧义转为SEARCH
-- title: 更新后的标题（仅UPDATE）
-- due_date, reminder_date, reminder_time: 更新后的时间
+- title: 更新后的新标题（仅UPDATE且修改标题时），否则必须为 null
+- due_date: 更新后的截止日期（仅UPDATE且修改截止日期时），格式 YYYY-MM-DD
+- reminder_date: 更新后的提醒日期（仅UPDATE且修改提醒时），格式 YYYY-MM-DD
+- reminder_time: 更新后的提醒时间（仅UPDATE且修改提醒时），格式 HH:MM
 - confidence: 匹配置信度 (0-1)
 - reasoning: 匹配理由
 
-如果没有匹配的任务，返回todo_id为null，action可能转为CREATE或SEARCH。
+重要：不修改的字段必须设为 null，不要返回原值！
 """
 
         try:

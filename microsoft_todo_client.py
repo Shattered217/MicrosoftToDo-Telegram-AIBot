@@ -282,7 +282,8 @@ class MicrosoftTodoDirectClient:
         return await self._make_request("POST", f"/me/todo/lists/{list_id}/tasks", data)
     
     async def update_task(self, list_id: str, task_id: str, title: str = None, 
-                         description: str = None, status: str = None) -> Dict[str, Any]:
+                         description: str = None, status: str = None,
+                         due_date: str = None, reminder_datetime: str = None) -> Dict[str, Any]:
         """更新任务"""
         data = {}
         
@@ -297,6 +298,18 @@ class MicrosoftTodoDirectClient:
         
         if status:
             data["status"] = status
+        
+        if due_date:
+            data["dueDateTime"] = {
+                "dateTime": due_date,
+                "timeZone": Config.TIMEZONE
+            }
+        
+        if reminder_datetime:
+            data["reminderDateTime"] = {
+                "dateTime": reminder_datetime,
+                "timeZone": Config.TIMEZONE
+            }
         
         return await self._make_request("PATCH", f"/me/todo/lists/{list_id}/tasks/{task_id}", data)
     
@@ -403,7 +416,29 @@ class MicrosoftTodoDirectClient:
         if not list_id:
             return {"error": "找不到任务所在的列表"}
         
-        return await self.update_task(list_id, todo_id, title=title, description=description)
+        # 处理提醒时间
+        reminder_datetime = None
+        if reminder_date and reminder_time:
+            reminder_datetime = f"{reminder_date}T{reminder_time}:00"
+        elif reminder_date:
+            reminder_datetime = f"{reminder_date}T09:00:00"
+        
+        # 处理截止日期
+        formatted_due_date = None
+        if due_date:
+            if 'T' not in due_date:
+                formatted_due_date = f"{due_date}T00:00:00"
+            else:
+                formatted_due_date = due_date
+        
+        return await self.update_task(
+            list_id, 
+            todo_id, 
+            title=title, 
+            description=description,
+            due_date=formatted_due_date,
+            reminder_datetime=reminder_datetime
+        )
     
     async def delete_todo(self, todo_id: str, list_id: str = None) -> Dict[str, Any]:
         """删除待办事项（兼容性方法）"""

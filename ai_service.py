@@ -213,7 +213,7 @@ class AIService:
 
 UPDATE示例：
 输入："把跑步时间修改为下午2点"
-输出：{"action": "UPDATE", "title": "跑步", "target_description": "跑步", "modification_intent": "时间改为下午2点", ...}
+输出：{{"action": "UPDATE", "title": "跑步", "target_description": "跑步", "modification_intent": "时间改为下午2点", ...}}
 """
 
         user_prompt = f"用户输入：{text}"

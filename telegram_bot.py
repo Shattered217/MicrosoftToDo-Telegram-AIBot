@@ -114,6 +114,16 @@ class TodoTelegramBot:
 
         logger.info("Telegram Bot已启动")
 
+    async def _auto_delete_messages(self, chat_id: int, message_ids: list, delay: int = 30):
+        """延迟删除消息"""
+        await asyncio.sleep(delay)
+        for msg_id in message_ids:
+            try:
+                await self.application.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                logger.debug(f"已自动删除消息 {msg_id}")
+            except Exception as e:
+                logger.debug(f"删除消息失败 {msg_id}: {e}")
+    
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         """处理 Telegram 更新过程中的错误"""
         # 只记录关键错误，忽略网络波动等临时性错误
@@ -1147,7 +1157,14 @@ class TodoTelegramBot:
                     "\n使用 /refresh_token 刷新令牌或 /get_auth_link 重新授权"
                 )
 
-            await update.message.reply_text(status_message)
+            reply_msg = await update.message.reply_text(status_message)
+            
+            # 30秒后自动删除消息
+            asyncio.create_task(self._auto_delete_messages(
+                chat_id=update.effective_chat.id,
+                message_ids=[update.message.message_id, reply_msg.message_id],
+                delay=30
+            ))
 
         except Exception as e:
             logger.error(f"检查令牌状态失败: {e}")
@@ -1169,17 +1186,26 @@ class TodoTelegramBot:
                 new_refresh_token = self.todo_client.refresh_token
 
                 if await self._save_tokens_to_env(new_access_token, new_refresh_token):
-                    await update.message.reply_text(
+                    reply_msg = await update.message.reply_text(
                         "令牌刷新成功！\n\n"
                         f"新访问令牌: ***{new_access_token[-8:]}\n"
-                        "已自动保存到配置文件"
+                        "已自动保存到配置文件\n\n"
+                        "⏰ 此消息30秒后自动删除"
                     )
                 else:
-                    await update.message.reply_text(
+                    reply_msg = await update.message.reply_text(
                         "令牌刷新成功但保存失败\n\n"
                         f"新访问令牌: ***{new_access_token[-8:]}\n"
-                        "请联系管理员手动更新配置文件"
+                        "请联系管理员手动更新配置文件\n\n"
+                        "⏰ 此消息30秒后自动删除"
                     )
+                
+                # 30秒后自动删除消息
+                asyncio.create_task(self._auto_delete_messages(
+                    chat_id=update.effective_chat.id,
+                    message_ids=[update.message.message_id, reply_msg.message_id],
+                    delay=30
+                ))
             else:
                 await update.message.reply_text(
                     "令牌刷新失败\n\n"

@@ -383,6 +383,28 @@ class MicrosoftTodoDirectClient:
         
         return await self.update_task(list_id, todo_id, status="completed")
     
+    async def update_todo(self, todo_id: str, title: str = None, description: str = None,
+                        due_date: str = None, reminder_date: str = None, 
+                        reminder_time: str = None, list_id: str = None) -> Dict[str, Any]:
+        """更新待办事项（兼容性方法）"""
+        if not list_id:
+            lists_result = await self.get_task_lists()
+            if "value" in lists_result:
+                for task_list in lists_result["value"]:
+                    tasks_result = await self.get_tasks(task_list["id"])
+                    if "value" in tasks_result:
+                        for task in tasks_result["value"]:
+                            if task["id"] == todo_id:
+                                list_id = task_list["id"]
+                                break
+                    if list_id:
+                        break
+        
+        if not list_id:
+            return {"error": "找不到任务所在的列表"}
+        
+        return await self.update_task(list_id, todo_id, title=title, description=description)
+    
     async def delete_todo(self, todo_id: str, list_id: str = None) -> Dict[str, Any]:
         """删除待办事项（兼容性方法）"""
         if not list_id:

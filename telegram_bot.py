@@ -102,11 +102,38 @@ class TodoTelegramBot:
         )
         self.application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
 
+        # 添加错误处理器
+        self.application.add_error_handler(self.error_handler)
+
         await self.application.initialize()
         await self.application.start()
-        await self.application.updater.start_polling()
+        await self.application.updater.start_polling(
+            drop_pending_updates=True,  # 跳过启动前的旧消息
+            allowed_updates=Update.ALL_TYPES
+        )
 
         logger.info("Telegram Bot已启动")
+
+    async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """处理 Telegram 更新过程中的错误"""
+        # 只记录关键错误，忽略网络波动等临时性错误
+        import traceback
+        from telegram.error import NetworkError, TimedOut, RetryAfter
+        
+        error = context.error
+        
+        # 忽略常见的网络错误
+        if isinstance(error, (NetworkError, TimedOut)):
+            logger.debug(f"网络错误（已忽略）: {error}")
+            return
+        
+        if isinstance(error, RetryAfter):
+            logger.debug(f"速率限制（已忽略）: {error}")
+            return
+        
+        # 记录其他错误
+        logger.error(f"更新 {update} 时发生错误: {error}")
+        logger.error("".join(traceback.format_exception(None, error, error.__traceback__)))
 
     async def stop(self):
         if self.application:
@@ -993,7 +1020,15 @@ class TodoTelegramBot:
                         todo_id = search_results[0].get("id", "")
 
                 if todo_id:
-                    return {"error": "更新功能需要指定任务列表ID，暂不支持通过搜索更新"}
+                    # 执行更新操作
+                    return await self.todo_client.update_todo(
+                        todo_id=todo_id,
+                        title=analysis.get("title"),
+                        description=analysis.get("description"),
+                        due_date=analysis.get("due_date"),
+                        reminder_date=analysis.get("reminder_date"),
+                        reminder_time=analysis.get("reminder_time"),
+                    )
                 else:
                     return {"error": "未找到要更新的待办事项"}
 

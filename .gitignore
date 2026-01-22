@@ -37,7 +37,6 @@ ENV/
 
 # uv
 .python-version
-uv.lock
 .uv/
 
 # IDE

@@ -44,59 +44,7 @@ class DecomposeMixin:
     
     async def decompose_task(self, task_description: str) -> Dict[str, Any]:
         """将复杂任务拆解为子任务列表"""
-        from datetime import datetime
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
-        system_prompt = f"""你是一个智能任务拆解助手。将用户的复杂任务拆解为3-7个具体可执行的子任务。
-
-当前时间：{current_time}
-
-拆解原则：
-1. 每个子任务应该是具体、可执行的动作
-2. 子任务按逻辑顺序排列
-3. 子任务标题简洁（10字以内）
-4. **重要：第一个子任务的截止日期应从明天或后天开始**
-5. 后续任务根据工作量合理递增，不要均匀分布
-6. 紧急任务的日期应该更紧凑
-
-**日期设置规则：**
-- 第一个任务：明天或后天（{current_time[:10]} + 1~2天）
-- 后续任务：根据前序任务的工作量递增
-- 如果用户提到"一个月内"，最后一个任务应在约30天后
-- 如果用户提到"一周内"，所有任务应在7天内完成
-
-{self._get_common_time_rules(current_time)}
-
-**输出格式：严格的JSON对象**
-
-字段：
-- original_task: 原始任务描述
-- subtasks: 子任务数组，每个子任务包含：
-  - title: 子任务标题（必需，10字以内）
-  - description: 详细描述（可选）
-  - due_date: 建议截止日期（格式 YYYY-MM-DD，第一个任务从明天开始！）
-  - reminder_date: 建议提醒日期（可选，格式 YYYY-MM-DD）
-  - reminder_time: 建议提醒时间（可选，格式 HH:MM）
-  - priority: 优先级 1-5（1最高）
-- estimated_total_days: 预估完成总天数
-- reasoning: 拆解理由
-
-示例（假设今天是2026-01-24）：
-输入："一周内完成年终汇报"
-输出：
-{{
-  "original_task": "一周内完成年终汇报",
-  "subtasks": [
-    {{"title": "收集年度数据", "due_date": "2026-01-25", "priority": 1}},
-    {{"title": "梳理项目成果", "due_date": "2026-01-26", "priority": 2}},
-    {{"title": "制作PPT", "due_date": "2026-01-28", "priority": 3}},
-    {{"title": "准备演讲稿", "due_date": "2026-01-29", "priority": 4}},
-    {{"title": "排练演示", "due_date": "2026-01-30", "priority": 5}}
-  ],
-  "estimated_total_days": 7,
-  "reasoning": "紧急任务，第一步从明天开始"
-}}
-"""
+        system_prompt = self._get_decompose_prompt()
 
         user_prompt = f"请拆解以下任务：{task_description}"
         

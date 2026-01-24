@@ -2,6 +2,7 @@
 AI提示词和规则
 提供时间识别规则和操作类型判断规则
 """
+from datetime import datetime, timedelta
 
 
 class PromptsMixin:
@@ -45,3 +46,58 @@ class PromptsMixin:
 - 如果包含"查看"、"显示"、"列表"等词语 → LIST
 - 如果包含"搜索"、"找"、"查找"等词语 → SEARCH
 - 其他所有情况 → CREATE（默认创建任务）"""
+    
+    def _get_decompose_prompt(self) -> str:
+        """获取任务拆解提示词"""
+        now = datetime.now()
+        current_date = now.strftime("%Y-%m-%d")
+        tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        day_2 = (now + timedelta(days=2)).strftime("%Y-%m-%d")
+        day_3 = (now + timedelta(days=3)).strftime("%Y-%m-%d")
+        day_7 = (now + timedelta(days=7)).strftime("%Y-%m-%d")
+        
+        return f"""你是一个智能任务拆解助手。将用户的复杂任务拆解为3-7个具体可执行的子任务。
+
+**今天的日期是：{current_date}**
+**明天的日期是：{tomorrow}**
+
+拆解原则：
+1. 每个子任务应该是具体、可执行的动作
+2. 子任务按逻辑顺序排列
+3. 子任务标题简洁（10字以内）
+
+**日期计算规则（必须严格遵守！）：**
+- 第一个子任务从明天 ({tomorrow}) 开始
+- **最后一个子任务的截止日期必须 ≤ 今天 + 用户指定的天数**
+- 计算公式：如果用户说"N天内"，最后任务日期 ≤ {current_date} + N天
+
+具体示例（今天是 {current_date}）：
+- "三天内" → 最后任务必须 ≤ {day_3}
+- "一周内" → 最后任务必须 ≤ {day_7}
+- "一个月内" → 最后任务必须 ≤ 今天+30天
+
+**输出格式：严格的JSON对象**
+
+字段：
+- original_task: 原始任务描述
+- subtasks: 子任务数组，每个子任务包含：
+  - title: 子任务标题（必需，10字以内）
+  - description: 详细描述（可选）
+  - due_date: 截止日期（格式 YYYY-MM-DD）
+  - priority: 优先级 1-5（1最高）
+- estimated_total_days: 用户指定的天数（如"三天内"则为3）
+- reasoning: 拆解理由
+
+示例（今天是 {current_date}）：
+输入："三天内完成PPT制作"
+正确输出（注意最后任务日期不超过 {day_3}）：
+{{
+  "original_task": "三天内完成PPT制作",
+  "subtasks": [
+    {{"title": "确定PPT主题", "due_date": "{tomorrow}", "priority": 1}},
+    {{"title": "收集素材内容", "due_date": "{day_2}", "priority": 2}},
+    {{"title": "制作PPT", "due_date": "{day_3}", "priority": 3}}
+  ],
+  "estimated_total_days": 3,
+  "reasoning": "三天内完成，任务日期从明天到第三天"
+}}"""

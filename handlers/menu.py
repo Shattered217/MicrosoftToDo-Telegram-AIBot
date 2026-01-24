@@ -121,7 +121,7 @@ class MenuHandlers:
         await query.edit_message_text("❌ 已取消任务创建")
     
     async def _handle_decompose_create_original(self, query, context, user_id):
-        """处理不拆解，创建原任务"""
+        """处理不拆解，走简单任务流程"""
         try:
             decompose_result = self.pending_decompose.get(user_id)
             if not decompose_result:
@@ -130,19 +130,24 @@ class MenuHandlers:
             
             original_task = decompose_result.get('original_task', '任务')
             
-            # 创建原始任务
-            result = await self.todo_client.create_todo(
-                title=original_task[:50],
-                description='',
-            )
-            
             # 清理会话
             del self.pending_decompose[user_id]
             
-            if 'error' not in result:
-                await query.edit_message_text(f"✅ 已创建任务「{original_task[:20]}」")
-            else:
-                await query.edit_message_text(f"❌ 创建失败: {result.get('error')}")
+            await query.edit_message_text("⏳ 正在创建任务...")
+            
+            # 走简单任务流程：AI分析并提取日期信息
+            existing_todos = await self.todo_client.list_todos()
+            analysis = await self.ai_service.analyze_text_for_todos(original_task, existing_todos)
+            
+            # 强制设为 CREATE（跳过拆解检测）
+            analysis['action'] = 'CREATE'
+            
+            # 执行创建
+            result = await self.execute_action(analysis)
+            
+            # 生成响应
+            response = await self.ai_service.generate_response(analysis, result)
+            await query.edit_message_text(response)
                 
         except Exception as e:
             logger.error(f"创建原任务失败: {e}")

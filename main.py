@@ -15,7 +15,7 @@ logging.basicConfig(
     ]
 )
 
-# 抑制 Telegram 轮询的网络错误日志（这些错误通常是暂时性的，不影响功能）
+# 抑制 Telegram 轮询的网络错误日志
 logging.getLogger('telegram.ext.Updater').setLevel(logging.CRITICAL)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 

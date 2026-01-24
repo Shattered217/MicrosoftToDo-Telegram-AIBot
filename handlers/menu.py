@@ -23,7 +23,7 @@ class MenuHandlers:
         await query.answer()
 
         user_id = query.from_user.id
-        if not self._is_admin(user_id):
+        if not self.auth_manager.is_admin(user_id):
             username = query.from_user.username or "未知用户"
             logger.warning(
                 f"未授权用户尝试使用回调功能: ID={user_id}, 用户名=@{username}"

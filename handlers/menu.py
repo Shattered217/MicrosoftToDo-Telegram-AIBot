@@ -33,7 +33,14 @@ class MenuHandlers:
 
         callback_data = query.data
 
-        if callback_data == "menu_list_all":
+        # 处理任务拆解相关回调
+        if callback_data == "decompose_confirm_all":
+            await self._handle_decompose_confirm_all(query, context, user_id)
+        elif callback_data == "decompose_cancel":
+            await self._handle_decompose_cancel(query, context, user_id)
+        elif callback_data == "decompose_create_original":
+            await self._handle_decompose_create_original(query, context, user_id)
+        elif callback_data == "menu_list_all":
             await self._handle_menu_list_all(query, context)
         elif callback_data == "menu_list_active":
             await self._handle_menu_list_active(query, context)
@@ -59,6 +66,87 @@ class MenuHandlers:
             await self._handle_token_refresh_callback(query, context)
         elif callback_data == "token_auth_link":
             await self._handle_token_auth_link_callback(query, context)
+
+    async def _handle_decompose_confirm_all(self, query, context, user_id):
+        """处理确认全部创建拆解任务"""
+        try:
+            decompose_result = self.pending_decompose.get(user_id)
+            if not decompose_result:
+                await query.edit_message_text("❌ 拆解会话已过期，请重新发送任务")
+                return
+            
+            subtasks = decompose_result.get('subtasks', [])
+            if not subtasks:
+                await query.edit_message_text("❌ 没有找到子任务")
+                return
+            
+            await query.edit_message_text("⏳ 正在创建子任务...")
+            
+            created_count = 0
+            failed_count = 0
+            
+            for task in subtasks:
+                result = await self.todo_client.create_todo(
+                    title=task.get('title', '子任务'),
+                    description=task.get('description', ''),
+                    due_date=task.get('due_date'),
+                    reminder_date=task.get('reminder_date'),
+                    reminder_time=task.get('reminder_time'),
+                )
+                if 'error' not in result:
+                    created_count += 1
+                else:
+                    failed_count += 1
+            
+            # 清理会话
+            del self.pending_decompose[user_id]
+            
+            if failed_count == 0:
+                await query.edit_message_text(
+                    f"✅ 成功创建 {created_count} 个子任务！"
+                )
+            else:
+                await query.edit_message_text(
+                    f"⚠️ 创建完成：成功 {created_count} 个，失败 {failed_count} 个"
+                )
+                
+        except Exception as e:
+            logger.error(f"创建拆解任务失败: {e}")
+            await query.edit_message_text(f"❌ 创建失败: {str(e)}")
+    
+    async def _handle_decompose_cancel(self, query, context, user_id):
+        """处理取消拆解"""
+        if user_id in self.pending_decompose:
+            del self.pending_decompose[user_id]
+        await query.edit_message_text("❌ 已取消任务创建")
+    
+    async def _handle_decompose_create_original(self, query, context, user_id):
+        """处理不拆解，创建原任务"""
+        try:
+            decompose_result = self.pending_decompose.get(user_id)
+            if not decompose_result:
+                await query.edit_message_text("❌ 会话已过期，请重新发送任务")
+                return
+            
+            original_task = decompose_result.get('original_task', '任务')
+            
+            # 创建原始任务
+            result = await self.todo_client.create_todo(
+                title=original_task[:50],
+                description='',
+            )
+            
+            # 清理会话
+            del self.pending_decompose[user_id]
+            
+            if 'error' not in result:
+                await query.edit_message_text(f"✅ 已创建任务「{original_task[:20]}」")
+            else:
+                await query.edit_message_text(f"❌ 创建失败: {result.get('error')}")
+                
+        except Exception as e:
+            logger.error(f"创建原任务失败: {e}")
+            await query.edit_message_text(f"❌ 创建失败: {str(e)}")
 
     async def _handle_menu_list_all(self, query, context):
         try:

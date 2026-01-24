@@ -15,11 +15,12 @@ from ai.prompts import PromptsMixin
 from ai.intent import IntentMixin
 from ai.image import ImageMixin
 from ai.response import ResponseMixin
+from ai.decompose import DecomposeMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AIService(PromptsMixin, IntentMixin, ImageMixin, ResponseMixin):
+class AIService(PromptsMixin, IntentMixin, ImageMixin, ResponseMixin, DecomposeMixin):
     """
     AI服务类
     
@@ -28,6 +29,7 @@ class AIService(PromptsMixin, IntentMixin, ImageMixin, ResponseMixin):
     - IntentMixin: 意图分析
     - ImageMixin: 图片处理
     - ResponseMixin: 响应生成
+    - DecomposeMixin: 任务拆解
     """
     
     def __init__(self):

@@ -65,6 +65,7 @@ class TodoTelegramBot(CommandHandlers, MenuHandlers, TokenHandlers, AdminHandler
         self.todo_client = MicrosoftTodoDirectClient()
         self.application = None
         self.pending_auth = {}
+        self.pending_decompose = {}  # 存储待确认的任务拆解
         self.auth_manager = auth_manager  # 使用全局鉴权管理器
 
     async def start(self):
@@ -251,6 +252,31 @@ class TodoTelegramBot(CommandHandlers, MenuHandlers, TokenHandlers, AdminHandler
             analysis = await self.ai_service.analyze_text_for_todos(
                 user_text, existing_todos
             )
+
+            # 检测是否应该建议拆解任务
+            if (analysis.get('action') == 'CREATE' and 
+                self.ai_service._should_suggest_decompose(user_text, analysis)):
+                # 调用AI拆解任务
+                decompose_result = await self.ai_service.decompose_task(user_text)
+                
+                if decompose_result.get('action') == 'DECOMPOSE':
+                    # 保存待确认的拆解结果
+                    self.pending_decompose[user_id] = decompose_result
+                    
+                    # 发送交互式确认消息
+                    message = self.ai_service.format_decompose_message(decompose_result)
+                    keyboard = [
+                        [
+                            InlineKeyboardButton("✅ 全部创建", callback_data="decompose_confirm_all"),
+                            InlineKeyboardButton("❌ 取消", callback_data="decompose_cancel"),
+                        ],
+                        [
+                            InlineKeyboardButton("📝 不拆解，创建原任务", callback_data="decompose_create_original"),
+                        ]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.message.reply_text(message, reply_markup=reply_markup, parse_mode="Markdown")
+                    return
 
             result = await self.execute_action(analysis)
 

@@ -12,7 +12,6 @@ from datetime import datetime
 import pytz
 from config import Config
 
-# 导入功能混入类
 from todo.token_manager import TokenManagerMixin
 from todo.api import ApiMixin
 from todo.compat import CompatMixin
@@ -45,25 +44,19 @@ class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
         """将本地日期时间转换为UTC ISO格式"""
         try:
             if time_str:
-                # 组合日期和时间
                 dt_str = f"{date_str} {time_str}"
                 local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
             else:
-                # 只有日期，使用默认时间
                 local_dt = datetime.strptime(date_str, "%Y-%m-%d")
             
-            # 设置为本地时区
             local_dt = self.local_tz.localize(local_dt)
             
-            # 转换为UTC
             utc_dt = local_dt.astimezone(self.utc_tz)
             
-            # 返回ISO格式字符串（去掉时区信息，因为Graph API要求）
             return utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
             
         except Exception as e:
             logger.error(f"时区转换失败: {e}")
-            # fallback: 直接返回原格式
             if time_str:
                 return f"{date_str}T{time_str}:00.000Z"
             else:
@@ -88,9 +81,7 @@ class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
             async with self.session.request(method, url, headers=headers, json=data) as response:
                 if response.status == 401 and retry_on_401:
                     logger.warning("访问令牌已过期，尝试刷新...")
-                    # 尝试刷新令牌
                     if await self._refresh_access_token():
-                        # 刷新成功，重新发送请求（避免无限递归）
                         return await self._make_request(method, endpoint, data, retry_on_401=False)
                     else:
                         return {"error": "访问令牌无效且刷新失败"}

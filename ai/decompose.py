@@ -9,7 +9,6 @@ from typing import Dict, Any, List, Optional
 logger = logging.getLogger(__name__)
 
 
-# 复杂任务关键词模式
 COMPLEX_TASK_PATTERNS = [
     "准备", "筹备", "组织", "策划", "规划",
     "完成", "搞定", "处理",
@@ -24,22 +23,17 @@ class DecomposeMixin:
     
     def _should_suggest_decompose(self, text: str, analysis: Dict[str, Any]) -> bool:
         """判断是否应该建议拆解任务"""
-        # 只对 CREATE 操作建议拆解
         if analysis.get('action') != 'CREATE':
             return False
         
-        # 检查是否包含复杂任务关键词
         text_lower = text.lower()
         has_complex_pattern = any(pattern in text_lower for pattern in COMPLEX_TASK_PATTERNS)
         
-        # 检查任务标题长度（较长的标题可能是复杂任务）
         title = analysis.get('title', '')
         is_long_title = len(title) > 15
         
-        # 检查置信度（低置信度可能意味着任务描述模糊）
         low_confidence = analysis.get('confidence', 1.0) < 0.7
         
-        # 满足任意条件就建议拆解
         return has_complex_pattern or (is_long_title and low_confidence)
     
     async def decompose_task(self, task_description: str) -> Dict[str, Any]:
@@ -82,7 +76,6 @@ class DecomposeMixin:
                     break
                 await asyncio.sleep(1)
         
-        # Fallback: 返回原始创建任务
         logger.warning("任务拆解失败，回退到普通创建")
         return {
             "action": "CREATE",
@@ -95,7 +88,6 @@ class DecomposeMixin:
         subtasks = analysis.get('subtasks', [])
         original_task = analysis.get('original_task', '复杂任务')
         
-        # 表情符号映射
         priority_emoji = {1: "🔴", 2: "🟠", 3: "🟡", 4: "🟢", 5: "🔵"}
         
         message = f"🎯 **检测到复杂任务，建议拆解为以下子任务：**\n\n"

@@ -19,7 +19,6 @@ from ai_service import AIService
 from microsoft_todo_client import MicrosoftTodoDirectClient
 from auth_manager import auth_manager
 
-# 导入处理器混入类
 from handlers.commands import CommandHandlers
 from handlers.menu import MenuHandlers
 from handlers.token import TokenHandlers
@@ -74,7 +73,6 @@ class TodoTelegramBot(
 
         self.application = builder.build()
 
-        # 注册命令处理器
         self.application.add_handler(CommandHandler("start", self.start_command))
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("menu", self.menu_command))
@@ -85,19 +83,16 @@ class TodoTelegramBot(
         self.application.add_handler(CommandHandler("get_auth_link", self.get_auth_link_command))
         self.application.add_handler(CommandHandler("token_status", self.token_status_command))
 
-        # 管理员命令
         self.application.add_handler(CommandHandler("blacklist_add", self.blacklist_add_command))
         self.application.add_handler(CommandHandler("blacklist_remove", self.blacklist_remove_command))
         self.application.add_handler(CommandHandler("whitelist_add", self.whitelist_add_command))
         self.application.add_handler(CommandHandler("whitelist_remove", self.whitelist_remove_command))
         self.application.add_handler(CommandHandler("access_stats", self.access_stats_command))
 
-        # 回调和消息处理器
         self.application.add_handler(CallbackQueryHandler(self.handle_callback_query))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
         self.application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
 
-        # 错误处理
         self.application.add_error_handler(self.error_handler)
 
         await self.application.initialize()

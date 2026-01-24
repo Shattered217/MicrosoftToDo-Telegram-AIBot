@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 class ApiMixin:
     """基础API操作混入类"""
     
-    # ========== 任务列表管理 ==========
-    
     async def get_task_lists(self) -> Dict[str, Any]:
         """获取所有任务列表"""
         return await self._make_request("GET", "/me/todo/lists")
@@ -33,15 +31,11 @@ class ApiMixin:
         """删除任务列表"""
         return await self._make_request("DELETE", f"/me/todo/lists/{list_id}")
     
-    # ========== 任务管理 ==========
-    
     async def get_tasks(self, list_id: str = None, filter_query: str = None) -> Dict[str, Any]:
         """获取任务"""
         if not list_id:
-            # 如果没有指定列表ID，获取默认列表
             lists_result = await self.get_task_lists()
             if "value" in lists_result and lists_result["value"]:
-                # 查找默认列表或使用第一个列表
                 for task_list in lists_result["value"]:
                     if task_list.get("wellknownListName") == "defaultList":
                         list_id = task_list["id"]
@@ -93,7 +87,6 @@ class ApiMixin:
                 "timeZone": Config.TIMEZONE
             }
         
-        # 添加提醒设置
         if reminder_datetime:
             data["reminderDateTime"] = {
                 "dateTime": reminder_datetime,

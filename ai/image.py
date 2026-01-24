@@ -26,14 +26,11 @@ class ImageMixin:
             
             img = Image.open(BytesIO(image_data))
             
-            # 计算缩放比例
             ratio = (max_size / len(image_data)) ** 0.5
             new_size = (int(img.width * ratio), int(img.height * ratio))
             
-            # 缩放图片
             img_resized = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # 保存为JPEG以进一步压缩
             output = BytesIO()
             img_resized.save(output, format='JPEG', quality=85, optimize=True)
             compressed = output.getvalue()
@@ -50,10 +47,8 @@ class ImageMixin:
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # 压缩图片以减少token消耗
         image_data = self._compress_image_if_needed(image_data, max_size=512*1024)
         
-        # 构建简化的上下文
         existing_context = f"\n\n当前时间：{current_time}"
         if existing_todos and len(existing_todos) > 0:
             active_todos = [t for t in existing_todos if not t.get('completed', False)][:3]

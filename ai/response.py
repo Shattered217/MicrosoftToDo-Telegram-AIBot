@@ -16,12 +16,10 @@ class ResponseMixin:
         action = analysis_result.get("action", "QUERY")
         confidence = analysis_result.get("confidence", 0.0)
         
-        # 先尝试使用模板生成（快速、省成本）
         template_response = self._generate_template_response(action, analysis_result, operation_result)
         if template_response:
             return template_response
         
-        # 复杂场景才调用AI
         try:
             from datetime import datetime
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -70,7 +68,6 @@ class ResponseMixin:
         reminder_date = analysis.get("reminder_date")
         reminder_time = analysis.get("reminder_time")
         
-        # 检查是否有错误
         has_error = isinstance(result, dict) and "error" in result
         
         if action == "CREATE":

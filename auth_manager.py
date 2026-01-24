@@ -71,7 +71,6 @@ class AuthManager:
         """
         now = time.time()
         
-        # 清理过期的请求记录
         if user_id in self.user_requests:
             self.user_requests[user_id] = [
                 ts for ts in self.user_requests[user_id]
@@ -80,13 +79,11 @@ class AuthManager:
         else:
             self.user_requests[user_id] = []
         
-        # 检查是否超过限制
         if len(self.user_requests[user_id]) >= self.rate_limit_max_requests:
             oldest_request = min(self.user_requests[user_id])
             wait_time = int(self.rate_limit_window - (now - oldest_request))
             return False, wait_time
         
-        # 记录本次请求
         self.user_requests[user_id].append(now)
         return True, None
     
@@ -108,7 +105,6 @@ class AuthManager:
         if username:
             self.access_stats[user_id]['username'] = username
         
-        # 记录具体操作
         if action not in self.access_stats[user_id]['actions']:
             self.access_stats[user_id]['actions'][action] = 0
         self.access_stats[user_id]['actions'][action] += 1
@@ -121,11 +117,9 @@ class AuthManager:
     
     def has_permission(self, user_id: int) -> bool:
         """检查用户是否有访问权限"""
-        # 黑名单优先级最高
         if self.is_blacklisted(user_id):
             return False
         
-        # 管理员或白名单用户
         return self.is_admin(user_id) or self.is_whitelisted(user_id)
     
     async def check_permission(
@@ -145,15 +139,12 @@ class AuthManager:
         user_id = user.id
         username = user.username or user.first_name or "未知用户"
         
-        # 记录访问
         self.record_access(user_id, username, action)
         
-        # 检查黑名单
         if self.is_blacklisted(user_id):
             logger.warning(f"黑名单用户尝试访问: ID={user_id}, 用户名=@{username}")
             return False, f"您已被封禁，无法使用此机器人\n\n用户ID: `{user_id}`"
         
-        # 检查权限
         if not self.has_permission(user_id):
             logger.warning(f"未授权用户尝试访问: ID={user_id}, 用户名=@{username}, 操作={action}")
             error_msg = f"""**访问被拒绝**
@@ -168,7 +159,6 @@ class AuthManager:
 如果您认为这是错误，请联系管理员并提供您的用户ID。"""
             return False, error_msg
         
-        # 检查速率限制（管理员豁免）
         if check_rate_limit and not self.is_admin(user_id):
             allowed, wait_time = self.check_rate_limit(user_id)
             if not allowed:
@@ -185,7 +175,6 @@ class AuthManager:
         return True, None
 
 
-# 全局鉴权管理器实例
 auth_manager = AuthManager()
 
 
@@ -201,10 +190,8 @@ def require_auth(check_rate_limit: bool = True, action: str = None):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-            # 自动获取操作名称
             action_name = action or func.__name__.replace('_command', '').replace('_', ' ')
             
-            # 权限检查
             allowed, error_msg = await auth_manager.check_permission(
                 update, 
                 check_rate_limit=check_rate_limit,
@@ -219,7 +206,6 @@ def require_auth(check_rate_limit: bool = True, action: str = None):
                     await update.callback_query.edit_message_text(error_msg, parse_mode='Markdown')
                 return None
             
-            # 执行原函数
             return await func(self, update, context, *args, **kwargs)
         
         return wrapper

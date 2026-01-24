@@ -17,16 +17,13 @@ class IntentMixin:
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # 1. 第一步：意图分析
         intent_analysis = await self._analyze_intent(text, current_time)
         
         # 如果是查询或创建，或者明确包含ID，直接返回初步结果
         if intent_analysis.get('action') in ['CREATE', 'LIST', 'SEARCH'] or intent_analysis.get('todo_id'):
             return intent_analysis
-            
-        # 2. 第二步：任务匹配（仅针对 UPDATE/COMPLETE/DELETE 且缺失 ID 的情况）
+        
         if intent_analysis.get('action') in ['UPDATE', 'COMPLETE', 'DELETE']:
-            # 获取所有未完成任务用于匹配
             candidates = [t for t in (existing_todos or []) if not t.get('completed', False)]
             
             if not candidates:
@@ -75,7 +72,6 @@ UPDATE示例：
 
         user_prompt = f"用户输入：{text}"
         
-        # 带重试的API调用
         max_retries = 2
         for attempt in range(max_retries + 1):
             try:
@@ -115,7 +111,6 @@ UPDATE示例：
         from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        # 构建候选列表字符串
         candidates_str = "\n".join([
             f"- [ID: {t['id']}] {t.get('title', '无标题')} (创建于: {t.get('createdDateTime', '未知')})"
             for t in candidates
@@ -172,7 +167,6 @@ UPDATE示例：
             
             result = self._robust_json_parse(content)
             if result:
-                # 合并结果：使用第二步的ID和参数，但保留第一步的其他有用信息作为后备
                 final_result = initial_analysis.copy()
                 final_result.update(result)
                 return self._validate_and_fix_dates(final_result)

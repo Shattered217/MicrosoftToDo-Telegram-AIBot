@@ -33,7 +33,6 @@ class MenuHandlers:
 
         callback_data = query.data
 
-        # 处理任务拆解相关回调
         if callback_data == "decompose_confirm_all":
             await self._handle_decompose_confirm_all(query, context, user_id)
         elif callback_data == "decompose_cancel":
@@ -98,7 +97,6 @@ class MenuHandlers:
                 else:
                     failed_count += 1
             
-            # 清理会话
             del self.pending_decompose[user_id]
             
             if failed_count == 0:
@@ -130,22 +128,17 @@ class MenuHandlers:
             
             original_task = decompose_result.get('original_task', '任务')
             
-            # 清理会话
             del self.pending_decompose[user_id]
             
             await query.edit_message_text("⏳ 正在创建任务...")
             
-            # 走简单任务流程：AI分析并提取日期信息
             existing_todos = await self.todo_client.list_todos()
             analysis = await self.ai_service.analyze_text_for_todos(original_task, existing_todos)
             
-            # 强制设为 CREATE（跳过拆解检测）
             analysis['action'] = 'CREATE'
             
-            # 执行创建
             result = await self.execute_action(analysis)
             
-            # 生成响应
             response = await self.ai_service.generate_response(analysis, result)
             await query.edit_message_text(response)
                 

@@ -39,7 +39,6 @@ class MessageHandlers:
             if await self._handle_keyboard_button(update, context, user_text):
                 return
 
-            # 对消息进行表态（reaction）
             await self._react(
                 context, update.effective_chat.id, update.message.message_id, "🤖"
             )
@@ -50,17 +49,13 @@ class MessageHandlers:
                 user_text, existing_todos
             )
 
-            # 检测是否应该建议拆解任务
             if (analysis.get('action') == 'CREATE' and 
                 self.ai_service._should_suggest_decompose(user_text, analysis)):
-                # 调用AI拆解任务
                 decompose_result = await self.ai_service.decompose_task(user_text)
                 
                 if decompose_result.get('action') == 'DECOMPOSE':
-                    # 保存待确认的拆解结果
                     self.pending_decompose[user_id] = decompose_result
                     
-                    # 发送交互式确认消息
                     message = self.ai_service.format_decompose_message(decompose_result)
                     keyboard = [
                         [
@@ -143,6 +138,19 @@ class MessageHandlers:
             logger.error(f"处理图片消息失败: {e}")
             await update.message.reply_text("处理图片时出现错误，请稍后重试。")
 
+    async def _resolve_todo_id(self, analysis: dict) -> str:
+        """从分析结果中解析或搜索任务ID"""
+        todo_id = analysis.get("todo_id", "")
+        if todo_id:
+            return todo_id
+        
+        search_query = analysis.get("search_query") or analysis.get("title", "")
+        if search_query:
+            search_results = await self.todo_client.search_todos_by_title(search_query)
+            if search_results:
+                return search_results[0].get("id", "")
+        return ""
+
     async def execute_action(self, analysis: dict) -> any:
         """执行分析结果对应的操作"""
         action = analysis.get("action", "QUERY")
@@ -152,23 +160,14 @@ class MessageHandlers:
                 if "items" in analysis:
                     results = []
                     for item in analysis["items"]:
-                        item_text = (
-                            f"{item.get('title', '')} {item.get('description', '')}"
-                        )
-
+                        item_text = f"{item.get('title', '')} {item.get('description', '')}"
                         existing_todos = await self.todo_client.list_todos()
-
-                        detailed_analysis = (
-                            await self.ai_service.analyze_text_for_todos(
-                                item_text, existing_todos
-                            )
+                        detailed_analysis = await self.ai_service.analyze_text_for_todos(
+                            item_text, existing_todos
                         )
-
                         result = await self.todo_client.create_todo(
                             title=detailed_analysis.get("title", item.get("title", "")),
-                            description=detailed_analysis.get(
-                                "description", item.get("description", "")
-                            ),
+                            description=detailed_analysis.get("description", item.get("description", "")),
                             due_date=detailed_analysis.get("due_date"),
                             reminder_date=detailed_analysis.get("reminder_date"),
                             reminder_time=detailed_analysis.get("reminder_time"),
@@ -185,68 +184,29 @@ class MessageHandlers:
                     )
 
             elif action == "UPDATE":
-                todo_id = analysis.get("todo_id", "")
+                todo_id = await self._resolve_todo_id(analysis)
                 if not todo_id:
-                    search_results = await self.todo_client.search_todos_by_title(
-                        analysis.get("title", "")
-                    )
-                    if search_results:
-                        todo_id = search_results[0].get("id", "")
-
-                if todo_id:
-                    update_params = {"todo_id": todo_id}
-                    
-                    if analysis.get("title"):
-                        update_params["title"] = analysis.get("title")
-                    if analysis.get("description"):
-                        update_params["description"] = analysis.get("description")
-                    if analysis.get("due_date"):
-                        update_params["due_date"] = analysis.get("due_date")
-                    if analysis.get("reminder_date"):
-                        update_params["reminder_date"] = analysis.get("reminder_date")
-                    if analysis.get("reminder_time"):
-                        update_params["reminder_time"] = analysis.get("reminder_time")
-                    
-                    logger.info(f"更新任务参数: {update_params}")
-                    return await self.todo_client.update_todo(**update_params)
-                else:
                     return {"error": "未找到要更新的待办事项"}
+                
+                update_params = {"todo_id": todo_id}
+                for key in ["title", "description", "due_date", "reminder_date", "reminder_time"]:
+                    if analysis.get(key):
+                        update_params[key] = analysis.get(key)
+                
+                logger.info(f"更新任务参数: {update_params}")
+                return await self.todo_client.update_todo(**update_params)
 
             elif action == "COMPLETE":
-                todo_id = analysis.get("todo_id", "")
-                if not todo_id:
-                    search_query = analysis.get(
-                        "search_query", analysis.get("title", "")
-                    )
-                    if search_query:
-                        search_results = await self.todo_client.search_todos_by_title(
-                            search_query
-                        )
-                        if search_results:
-                            todo_id = search_results[0].get("id", "")
-
+                todo_id = await self._resolve_todo_id(analysis)
                 if todo_id:
                     return await self.todo_client.complete_todo(todo_id)
-                else:
-                    return {"error": "未找到要完成的待办事项"}
+                return {"error": "未找到要完成的待办事项"}
 
             elif action == "DELETE":
-                todo_id = analysis.get("todo_id", "")
-                if not todo_id:
-                    search_query = analysis.get(
-                        "search_query", analysis.get("title", "")
-                    )
-                    if search_query:
-                        search_results = await self.todo_client.search_todos_by_title(
-                            search_query
-                        )
-                        if search_results:
-                            todo_id = search_results[0].get("id", "")
-
+                todo_id = await self._resolve_todo_id(analysis)
                 if todo_id:
                     return await self.todo_client.delete_todo(todo_id)
-                else:
-                    return {"error": "未找到要删除的待办事项"}
+                return {"error": "未找到要删除的待办事项"}
 
             elif action == "LIST":
                 return await self.todo_client.list_todos()
@@ -255,13 +215,10 @@ class MessageHandlers:
                 search_query = analysis.get("search_query", "")
                 if search_query:
                     return await self.todo_client.search_todos_by_title(search_query)
-                else:
-                    return {"error": "搜索关键词为空"}
+                return {"error": "搜索关键词为空"}
 
             else:
-                return {
-                    "message": "我理解了您的消息，但不确定需要执行什么具体操作。您可以更明确地告诉我您想要做什么。"
-                }
+                return {"message": "我理解了您的消息，但不确定需要执行什么具体操作。"}
 
         except Exception as e:
             logger.error(f"执行操作失败: {e}")

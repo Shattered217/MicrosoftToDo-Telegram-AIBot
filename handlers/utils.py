@@ -29,7 +29,6 @@ class UtilsHandlers:
         """处理 Telegram 更新过程中的错误"""
         error = context.error
         
-        # 忽略常见的网络错误
         if isinstance(error, (NetworkError, TimedOut)):
             logger.debug(f"网络错误（已忽略）: {error}")
             return
@@ -38,7 +37,6 @@ class UtilsHandlers:
             logger.debug(f"速率限制（已忽略）: {error}")
             return
         
-        # 记录其他错误
         logger.error(f"更新 {update} 时发生错误: {error}")
         logger.error("".join(traceback.format_exception(None, error, error.__traceback__)))
 

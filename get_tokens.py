@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 基于用户成功测试的令牌获取脚本
 """
@@ -11,13 +10,10 @@ def get_auth_url():
     client_id = Config.MS_TODO_CLIENT_ID
     redirect_uri = "http://localhost:3000/callback"
 
-    # 检测是否有client_secret来判断账户类型
     if Config.MS_TODO_CLIENT_SECRET:
-        # 工作/学校账户使用organizations或specific tenant
         authority = f"https://login.microsoftonline.com/{Config.MS_TODO_TENANT_ID}"
         print("检测到工作/学校账户模式（有client_secret）")
     else:
-        # 个人账户使用consumers
         authority = "https://login.microsoftonline.com/consumers"
         print("检测到个人账户模式（无client_secret）")
 
@@ -57,14 +53,12 @@ def get_client_credentials_token():
             error_desc = result.get('error_description', result.get('error'))
             print(f"获取令牌失败: {error_desc}")
 
-            # 检查是否是条件访问策略问题
             if "AADSTS53003" in str(error_desc) or "Conditional Access" in str(error_desc):
                 print("这通常是由于组织的条件访问策略限制了应用程序访问")
                 print(" 建议联系IT管理员或使用授权码流（浏览器登录）")
 
             return None
 
-        # 客户端凭据流不返回refresh_token，我们使用access_token作为refresh_token的占位符
         result["refresh_token"] = "client_credentials_flow"
         return result
 
@@ -77,7 +71,6 @@ def exchange_code_for_token(code):
     client_id = Config.MS_TODO_CLIENT_ID
     redirect_uri = "http://localhost:3000/callback"
 
-    # 根据是否有client_secret选择不同的authority
     if Config.MS_TODO_CLIENT_SECRET:
         authority = f"https://login.microsoftonline.com/{Config.MS_TODO_TENANT_ID}"
     else:
@@ -94,7 +87,6 @@ def exchange_code_for_token(code):
         "scope": scopes,
     }
 
-    # 如果有client_secret，添加到请求中（工作/学校账户需要）
     if Config.MS_TODO_CLIENT_SECRET:
         data["client_secret"] = Config.MS_TODO_CLIENT_SECRET
         print("使用密钥认证（工作/学校账户）")
@@ -111,7 +103,7 @@ def save_tokens_to_env(tokens):
         return False
 
     try:
-        # 读取现有的.env文件
+        
         env_lines = []
         try:
             with open('.env', 'r', encoding='utf-8') as f:
@@ -119,7 +111,6 @@ def save_tokens_to_env(tokens):
         except FileNotFoundError:
             pass
 
-        # 更新或添加令牌
         access_token_found = False
         refresh_token_found = False
 
@@ -131,13 +122,11 @@ def save_tokens_to_env(tokens):
                 env_lines[i] = f'MS_TODO_REFRESH_TOKEN={tokens["refresh_token"]}\n'
                 refresh_token_found = True
 
-        # 如果没有找到，则添加
         if not access_token_found:
             env_lines.append(f'MS_TODO_ACCESS_TOKEN={tokens["access_token"]}\n')
         if not refresh_token_found:
             env_lines.append(f'MS_TODO_REFRESH_TOKEN={tokens["refresh_token"]}\n')
 
-        # 写回文件
         with open('.env', 'w', encoding='utf-8') as f:
             f.writelines(env_lines)
 
@@ -153,13 +142,10 @@ def main():
     print("Microsoft Todo 令牌获取")
     print("=" * 40)
 
-    # 检查配置
     if not Config.MS_TODO_CLIENT_ID:
         print("缺少 MS_TODO_CLIENT_ID")
         print("请在.env文件中设置您的Azure应用程序ID")
         return False
-
-    # 根据是否有client_secret选择不同的认证方式
     if Config.MS_TODO_CLIENT_SECRET:
         print("检测到工作/学校账户配置（有client_secret）")
         print(f" Tenant ID: {Config.MS_TODO_TENANT_ID}")
@@ -168,14 +154,12 @@ def main():
         print(f"Client ID: {Config.MS_TODO_CLIENT_ID}")
 
         print("\n尝试客户端凭据流（无需浏览器登录）...")
-        # 首先尝试客户端凭据流
         tokens = get_client_credentials_token()
 
         if not tokens:
             print("\n 客户端凭据流失败，可能是由于条件访问策略限制")
             print("🌐 切换到授权码流（需要浏览器登录）")
 
-            # 如果客户端凭据流失败，使用授权码流
             print("\n请打开下面的链接登录并授权：")
             auth_url = get_auth_url()
             print(auth_url)
@@ -241,7 +225,6 @@ def main():
             print(f"获取令牌时出错: {e}")
             return False
 
-    # 公共的令牌处理逻辑
     print("成功获取令牌！")
     print(f"Access Token: {tokens['access_token'][:50]}...")
     if tokens.get('refresh_token') != 'client_credentials_flow':
@@ -250,7 +233,6 @@ def main():
         print("Refresh Token: 客户端凭据流（无需刷新令牌）")
     print(f"过期时间: {tokens.get('expires_in', 'N/A')} 秒")
 
-    # 保存到.env文件
     if save_tokens_to_env(tokens):
         print("\n 令牌获取完成！您现在可以运行 'python3 main.py' 启动Telegram Bot")
         return True

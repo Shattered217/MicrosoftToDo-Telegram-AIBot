@@ -23,6 +23,15 @@ logger = logging.getLogger(__name__)
 class TokenHandlers:
     """Token管理处理器混入类"""
 
+    @staticmethod
+    def _mask_tail(value: str, tail_len: int = 8) -> str:
+        """遮蔽敏感值，只显示末尾几位"""
+        if not value:
+            return "未设置"
+        if len(value) <= tail_len:
+            return value
+        return f"***{value[-tail_len:]}"
+
     async def token_status_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
@@ -32,16 +41,9 @@ class TokenHandlers:
         try:
             status_message = "令牌状态\n\n"
 
-            def _mask_tail(value: str, tail_len: int = 8) -> str:
-                if not value:
-                    return "未设置"
-                if len(value) <= tail_len:
-                    return value
-                return f"***{value[-tail_len:]}"
-
             if Config.MS_TODO_ACCESS_TOKEN:
                 status_message += (
-                    f"访问令牌: {_mask_tail(Config.MS_TODO_ACCESS_TOKEN)}\n"
+                    f"访问令牌: {self._mask_tail(Config.MS_TODO_ACCESS_TOKEN)}\n"
                 )
             else:
                 status_message += "访问令牌: 未设置\n"
@@ -51,7 +53,7 @@ class TokenHandlers:
                     status_message += "刷新令牌: 客户端凭据流\n"
                 else:
                     status_message += (
-                        f"刷新令牌: {_mask_tail(Config.MS_TODO_REFRESH_TOKEN)}\n"
+                        f"刷新令牌: {self._mask_tail(Config.MS_TODO_REFRESH_TOKEN)}\n"
                     )
             else:
                 status_message += "刷新令牌: 未设置\n"
@@ -364,16 +366,9 @@ class TokenHandlers:
         try:
             status_message = "**令牌状态**\n\n"
 
-            def _mask_tail(value: str, tail_len: int = 8) -> str:
-                if not value:
-                    return "未设置"
-                if len(value) <= tail_len:
-                    return value
-                return f"***{value[-tail_len:]}"
-
             if Config.MS_TODO_ACCESS_TOKEN:
                 status_message += (
-                    f"访问令牌: {_mask_tail(Config.MS_TODO_ACCESS_TOKEN)}\n"
+                    f"访问令牌: {self._mask_tail(Config.MS_TODO_ACCESS_TOKEN)}\n"
                 )
             else:
                 status_message += "访问令牌: 未设置\n"
@@ -383,7 +378,7 @@ class TokenHandlers:
                     status_message += "刷新令牌: 客户端凭据流\n"
                 else:
                     status_message += (
-                        f"刷新令牌: {_mask_tail(Config.MS_TODO_REFRESH_TOKEN)}\n"
+                        f"刷新令牌: {self._mask_tail(Config.MS_TODO_REFRESH_TOKEN)}\n"
                     )
             else:
                 status_message += "刷新令牌: 未设置\n"

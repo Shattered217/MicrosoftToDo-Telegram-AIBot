@@ -16,7 +16,6 @@ class TokenManagerMixin:
             logger.error("没有刷新令牌，无法刷新访问令牌")
             return False
             
-        # 检查是否是客户端凭据流
         if self.refresh_token == "client_credentials_flow":
             logger.info("检测到客户端凭据流，重新获取访问令牌")
             return await self._get_client_credentials_token()
@@ -28,13 +27,10 @@ class TokenManagerMixin:
         
         await self._ensure_session()
         
-        # 根据是否有client_secret选择不同的authority和认证方式
         if self.client_secret:
-            # 工作/学校账户
             token_url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
             logger.info("使用工作/学校账户刷新令牌")
         else:
-            # 个人账户
             token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
             logger.info("使用个人账户刷新令牌")
         
@@ -45,7 +41,6 @@ class TokenManagerMixin:
             "scope": "https://graph.microsoft.com/Tasks.ReadWrite https://graph.microsoft.com/User.Read offline_access"
         }
         
-        # 只有工作/学校账户需要client_secret
         if self.client_secret:
             data["client_secret"] = self.client_secret
         

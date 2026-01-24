@@ -14,7 +14,6 @@ class CompatMixin:
     async def create_todo(self, title: str, description: str = "", due_date: str = None, 
                          reminder_date: str = None, reminder_time: str = None) -> Dict[str, Any]:
         """创建待办事项（兼容性方法）"""
-        # 获取默认列表ID
         lists_result = await self.get_task_lists()
         if "error" in lists_result:
             return lists_result
@@ -31,17 +30,14 @@ class CompatMixin:
         if not list_id:
             return {"error": "没有找到可用的任务列表"}
         
-        # 组合截止日期（设为当天结束）
         due_datetime = None
         if due_date:
             due_datetime = self._convert_to_utc_iso(due_date, "23:59")
         
-        # 组合提醒日期和时间
         reminder_datetime = None
         if reminder_date and reminder_time:
             reminder_datetime = self._convert_to_utc_iso(reminder_date, reminder_time)
         elif reminder_date:
-            # 如果只有提醒日期，默认设为上午9点
             reminder_datetime = self._convert_to_utc_iso(reminder_date, "09:00")
         
         return await self.create_task_with_reminder(list_id, title, description, due_datetime, reminder_datetime)
@@ -68,20 +64,22 @@ class CompatMixin:
         else:
             return []
     
+    async def _find_list_id_for_task(self, todo_id: str) -> str:
+        """根据任务ID查找其所在的列表ID"""
+        lists_result = await self.get_task_lists()
+        if "value" in lists_result:
+            for task_list in lists_result["value"]:
+                tasks_result = await self.get_tasks(task_list["id"])
+                if "value" in tasks_result:
+                    for task in tasks_result["value"]:
+                        if task["id"] == todo_id:
+                            return task_list["id"]
+        return None
+    
     async def complete_todo(self, todo_id: str, list_id: str = None) -> Dict[str, Any]:
-        """标记待办事项为完成（兼容性方法）"""
+        """标记待办事项为完成"""
         if not list_id:
-            lists_result = await self.get_task_lists()
-            if "value" in lists_result:
-                for task_list in lists_result["value"]:
-                    tasks_result = await self.get_tasks(task_list["id"])
-                    if "value" in tasks_result:
-                        for task in tasks_result["value"]:
-                            if task["id"] == todo_id:
-                                list_id = task_list["id"]
-                                break
-                    if list_id:
-                        break
+            list_id = await self._find_list_id_for_task(todo_id)
         
         if not list_id:
             return {"error": "找不到任务所在的列表"}
@@ -91,31 +89,19 @@ class CompatMixin:
     async def update_todo(self, todo_id: str, title: str = None, description: str = None,
                         due_date: str = None, reminder_date: str = None, 
                         reminder_time: str = None, list_id: str = None) -> Dict[str, Any]:
-        """更新待办事项（兼容性方法）"""
+        """更新待办事项"""
         if not list_id:
-            lists_result = await self.get_task_lists()
-            if "value" in lists_result:
-                for task_list in lists_result["value"]:
-                    tasks_result = await self.get_tasks(task_list["id"])
-                    if "value" in tasks_result:
-                        for task in tasks_result["value"]:
-                            if task["id"] == todo_id:
-                                list_id = task_list["id"]
-                                break
-                    if list_id:
-                        break
+            list_id = await self._find_list_id_for_task(todo_id)
         
         if not list_id:
             return {"error": "找不到任务所在的列表"}
         
-        # 处理提醒时间
         reminder_datetime = None
         if reminder_date and reminder_time:
             reminder_datetime = f"{reminder_date}T{reminder_time}:00"
         elif reminder_date:
             reminder_datetime = f"{reminder_date}T09:00:00"
         
-        # 处理截止日期
         formatted_due_date = None
         if due_date:
             if 'T' not in due_date:
@@ -133,19 +119,9 @@ class CompatMixin:
         )
     
     async def delete_todo(self, todo_id: str, list_id: str = None) -> Dict[str, Any]:
-        """删除待办事项（兼容性方法）"""
+        """删除待办事项"""
         if not list_id:
-            lists_result = await self.get_task_lists()
-            if "value" in lists_result:
-                for task_list in lists_result["value"]:
-                    tasks_result = await self.get_tasks(task_list["id"])
-                    if "value" in tasks_result:
-                        for task in tasks_result["value"]:
-                            if task["id"] == todo_id:
-                                list_id = task_list["id"]
-                                break
-                    if list_id:
-                        break
+            list_id = await self._find_list_id_for_task(todo_id)
         
         if not list_id:
             return {"error": "找不到任务所在的列表"}

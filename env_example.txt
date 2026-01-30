@@ -50,3 +50,8 @@ TIMEZONE=Asia/Shanghai  # 默认东8区（中国标准时间）
 # TIMEZONE=America/New_York  # 美国东部时间
 # TIMEZONE=Europe/London     # 英国时间
 # TIMEZONE=UTC              # UTC时间
+
+# ESP32 Flask Server Configuration
+ESP32_API_KEY=esp32-todo-secret-key-2025  # ESP32 设备访问 API 的密钥
+ESP32_SERVER_HOST=0.0.0.0                  # 服务器绑定地址
+ESP32_SERVER_PORT=5000                     # 服务器端口

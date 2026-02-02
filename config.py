@@ -34,6 +34,11 @@ class Config:
     
     TIMEZONE = os.getenv('TIMEZONE', 'Asia/Shanghai')
     
+    # ESP32 Flask 服务器配置
+    ESP32_API_KEY = os.getenv('ESP32_API_KEY', 'esp32-todo-secret-key-2025')
+    ESP32_SERVER_HOST = os.getenv('ESP32_SERVER_HOST', '0.0.0.0')
+    ESP32_SERVER_PORT = int(os.getenv('ESP32_SERVER_PORT', '5000'))
+    
     @classmethod
     def validate(cls) -> List[str]:
         errors = []

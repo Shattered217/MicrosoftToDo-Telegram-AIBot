@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import sys
+import threading
 from pathlib import Path
 
 from config import Config
@@ -18,8 +19,31 @@ logging.basicConfig(
 # 抑制 Telegram 轮询的网络错误日志
 logging.getLogger('telegram.ext.Updater').setLevel(logging.CRITICAL)
 logging.getLogger('httpx').setLevel(logging.WARNING)
+# 抑制 Flask/Werkzeug 默认日志
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+
+def run_flask_server():
+    """在独立线程中运行 Flask 服务器"""
+    from esp32_server import create_app
+    
+    app = create_app()
+    
+    print("=" * 50)
+    print("ESP32 TODO API Server 已启动")
+    print(f"地址: http://{Config.ESP32_SERVER_HOST}:{Config.ESP32_SERVER_PORT}")
+    print("=" * 50)
+    
+    app.run(
+        host=Config.ESP32_SERVER_HOST,
+        port=Config.ESP32_SERVER_PORT,
+        debug=False, 
+        use_reloader=False,
+        threaded=True
+    )
+
 
 async def main():
     try:
@@ -46,6 +70,11 @@ async def main():
             print("python3 get_tokens.py")
             print("\n令牌获取成功后会自动保存到.env文件中")
             return
+        
+        # 启动 Flask 服务器线程
+        flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+        flask_thread.start()
+        logger.info("ESP32 Flask 服务器已启动")
         
         logger.info("配置验证通过，启动Bot...")
         print("Microsoft Todo Telegram Bot 正在启动...")

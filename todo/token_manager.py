@@ -52,6 +52,9 @@ class TokenManagerMixin:
                     if "refresh_token" in token_data:
                         self.refresh_token = token_data["refresh_token"]
                     
+                    if hasattr(self, '_update_token_cache'):
+                        self._update_token_cache()
+                    
                     logger.info("访问令牌刷新成功")
                     return True
                 else:

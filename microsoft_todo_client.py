@@ -18,6 +18,11 @@ from todo.compat import CompatMixin
 
 logger = logging.getLogger(__name__)
 
+_token_cache = {
+    "access_token": None,
+    "refresh_token": None
+}
+
 
 class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
     """
@@ -30,8 +35,9 @@ class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
     """
     
     def __init__(self):
-        self.access_token = Config.MS_TODO_ACCESS_TOKEN
-        self.refresh_token = Config.MS_TODO_REFRESH_TOKEN
+        global _token_cache
+        self.access_token = _token_cache["access_token"] or Config.MS_TODO_ACCESS_TOKEN
+        self.refresh_token = _token_cache["refresh_token"] or Config.MS_TODO_REFRESH_TOKEN
         self.base_url = "https://graph.microsoft.com/v1.0"
         self.session = None
         self.client_id = Config.MS_TODO_CLIENT_ID
@@ -39,6 +45,12 @@ class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
         self.tenant_id = Config.MS_TODO_TENANT_ID
         self.local_tz = pytz.timezone(Config.TIMEZONE)
         self.utc_tz = pytz.UTC
+    
+    def _update_token_cache(self):
+        """更新全局 token 缓存"""
+        global _token_cache
+        _token_cache["access_token"] = self.access_token
+        _token_cache["refresh_token"] = self.refresh_token
     
     def _convert_to_utc_iso(self, date_str: str, time_str: str = None) -> str:
         """将本地日期时间转换为UTC ISO格式"""
@@ -63,9 +75,14 @@ class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
                 return f"{date_str}T00:00:00.000Z"
         
     async def _ensure_session(self):
-        """确保HTTP会话存在"""
-        if not self.session:
-            self.session = aiohttp.ClientSession()
+        """确保HTTP会话存在且绑定到当前 event loop"""
+        try:
+            current_loop = asyncio.get_running_loop()
+            if self.session is None or self.session.closed:
+                self.session = aiohttp.ClientSession()
+        except RuntimeError:
+            if self.session is None:
+                self.session = aiohttp.ClientSession()
     
     async def _make_request(self, method: str, endpoint: str, data: Dict = None, retry_on_401: bool = True) -> Dict[str, Any]:
         """发送HTTP请求到Microsoft Graph API"""

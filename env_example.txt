@@ -1,57 +1,54 @@
-# Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-#TELEGRAM_BASE_URL=https://your-edgeone-or-proxy.example.com/bot  # 可选：自定义 Telegram Bot API Base URL
+# 环境配置模板
+# 复制此文件为 .env 并填入你的实际配置
 
-# OpenAI Configuration
+# ==================== Telegram Bot ====================
+# Telegram Bot Token，从 @BotFather 获取
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# Telegram 管理员用户 ID（多个用逗号分隔）
+TELEGRAM_ADMIN_IDS=your_telegram_user_id
+
+# ==================== OpenAI API ====================
+# OpenAI 兼容 API 密钥
 OPENAI_API_KEY=your_openai_api_key_here
+
+# API 基础 URL
+# OpenAI 官方: https://api.openai.com/v1
+# SiliconFlow（推荐，国内访问快）: https://api.siliconflow.cn/v1
 OPENAI_BASE_URL=https://api.siliconflow.cn/v1
+
+# 文本模型，用于任务分析、匹配和分解
+# 推荐模型: Qwen/Qwen3-30B-A3B-Instruct-2507
 OPENAI_MODEL=Qwen/Qwen3-30B-A3B-Instruct-2507
 
-# Vision-Language Model for Image Analysis
-OPENAI_VL_MODEL=Qwen/Qwen3-VL-32B-Instruct
-# 其他VL模型选项：
-# OPENAI_VL_MODEL=gpt-4-vision-preview
+# Vision 模型，用于图片分析
+# 推荐模型: Qwen/Qwen3-Omni-30B-A3B-Captioner
+OPENAI_VL_MODEL=Qwen/Qwen3-Omni-30B-A3B-Captioner
 
-# Microsoft Todo Authentication
-MS_TODO_ACCESS_TOKEN=your_access_token_here
-MS_TODO_REFRESH_TOKEN=your_refresh_token_here
+# ==================== Microsoft To Do ====================
+# 在 https://portal.azure.com 注册应用获取
+MS_TODO_CLIENT_ID=your_azure_app_client_id
 
-# Azure App Registration (required for authentication)
-MS_TODO_CLIENT_ID=your_client_id_here
+# 客户端密钥（可选，仅工作/学校账户支持）
+#MS_TODO_CLIENT_SECRET=your_client_secret_here
+#需要工作/学校账户才可使用密钥实现自动获取refresh_token，填入密钥即视为工作/学校账户
 
-# Account Type Configuration:
-# 1. 个人账户 (Personal Account): 
-#    - 不需要设置 MS_TODO_CLIENT_SECRET (留空或删除该行)
-#    - 系统会自动使用浏览器认证
-#    - MS_TODO_TENANT_ID 会自动设为 consumers
+# 访问令牌（会自动刷新）
+MS_TODO_ACCESS_TOKEN=your_access_token
 
-# 2. 工作/学校账户 (Work/School Account):
-#    - 必须设置 MS_TODO_CLIENT_SECRET
-#    - 系统会自动使用密钥认证
-#    - 设置相应的 MS_TODO_TENANT_ID
-MS_TODO_CLIENT_SECRET=your_client_secret_here
+# 刷新令牌（会自动刷新）
+MS_TODO_REFRESH_TOKEN=your_refresh_token
 
-# Tenant Configuration (仅工作/学校账户需要)
-# For work/school accounts:
-MS_TODO_TENANT_ID=organizations
-# For specific organization:
-# MS_TODO_TENANT_ID=your_tenant_id_here
-# 注意：个人账户会自动使用 consumers，无需设置
+# ==================== ESP32 Server（可选）====================
+# ESP32 设备访问 API 的密钥
+ESP32_API_KEY=your_esp32_api_key
 
+# 服务器绑定地址（0.0.0.0 表示所有接口，127.0.0.1 表示仅本地）
+ESP32_SERVER_HOST=0.0.0.0
 
-# Application Settings
-DEBUG=True
-MAX_IMAGE_SIZE=5242880  # 5MB in bytes
-ALLOWED_IMAGE_FORMATS=jpg,jpeg,png,gif,webp
+# 服务器端口
+ESP32_SERVER_PORT=5000
 
-# Timezone Configuration
-TIMEZONE=Asia/Shanghai  # 默认东8区（中国标准时间）
-# 其他时区示例：
-# TIMEZONE=America/New_York  # 美国东部时间
-# TIMEZONE=Europe/London     # 英国时间
-# TIMEZONE=UTC              # UTC时间
-
-# ESP32 Flask Server Configuration
-ESP32_API_KEY=esp32-todo-secret-key-2025  # ESP32 设备访问 API 的密钥
-ESP32_SERVER_HOST=0.0.0.0                  # 服务器绑定地址
-ESP32_SERVER_PORT=5000                     # 服务器端口
+# ==================== 调试模式 ====================
+# 设置为 true 启用详细日志
+debug=false

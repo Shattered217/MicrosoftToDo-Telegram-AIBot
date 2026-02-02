@@ -4,11 +4,15 @@
 
 ## 功能特性
 
-### 智能语义分析
+### 智能AI分析 (OpenAI Function Calling)
 
-- 使用 ChatGPT API 分析用户输入的自然语言
-- 自动识别用户意图（创建、更新、完成、删除、查询待办事项）
-- 支持模糊匹配和智能推理
+- **结构化输出**：使用OpenAI Function Calling确保AI响应准确性和一致性
+- **智能意图分析**：自动识别用户操作（创建、更新、完成、删除、查询）
+- **任务匹配**：模糊匹配现有任务，无需提供任务ID
+- **时间推断**：智能解析自然语言时间表达（"明天下午"、"下周五"等）
+- **两步图片分析**：
+  - Vision模型提取图片内容描述
+  - Function Calling结构化分析待办事项
 
 ### Telegram Bot 交互
 
@@ -16,18 +20,20 @@
 - 支持文本消息处理
 - 支持图片识别（手写清单、白板、便签等）
 - 丰富的命令支持
+- 实时反馈和错误处理
 
 ### 完整的待办事项管理
 
-- 创建新的待办事项
+- 创建新的待办事项（支持截止日期和提醒）
 - 查看所有/活跃的待办事项
 - 更新现有任务内容
 - 标记任务为完成
 - 删除不需要的任务
 - 按标题或日期搜索
 - 生成待办事项摘要
+- 任务拆解（将复杂任务分解为子任务）
 
-### Microsoft Todo 集成
+### Microsoft To Do 集成
 
 - 直接与 Microsoft Graph API 集成
 - 支持个人和工作/学校账户
@@ -35,6 +41,12 @@
 - 支持任务列表管理
 - 自动令牌刷新
 - 完整的错误处理
+
+### ESP32 硬件支持
+
+可选接入ESP32硬件看板，在物理设备上显示待办事项。
+
+详见配套项目：[ESP32-S3 Microsoft To Do Dashboard](https://github.com/Shattered217/ESP32-S3-MSToDo-Dash)
 
 ## 快速开始
 
@@ -178,29 +190,67 @@ python3 main.py
 ## 项目结构
 
 ```
-ToDoMCP/
+MicrosoftToDo-Telegram-AIBot/
 ├── main.py                    # 主程序入口
 ├── config.py                  # 配置管理
 ├── telegram_bot.py            # Telegram Bot实现
-├── ai_service.py              # ChatGPT API集成
+├── ai_service.py              # AI服务基类
 ├── microsoft_todo_client.py   # Microsoft Graph API客户端
+├── auth_manager.py            # 授权管理器
 ├── get_tokens.py              # 自动化令牌获取脚本
 ├── refresh_tokens.py          # 令牌刷新脚本
-├── test_tokens.py             # 令牌有效性测试脚本
 ├── requirements.txt           # Python依赖
+├── pyproject.toml             # uv项目配置
 ├── env_example.txt            # 环境变量示例
 ├── README.md                  # 项目说明
+├── Dockerfile                 # Docker配置
 ├── .gitignore                 # Git忽略文件
-└── .env                       # 环境变量配置（需要创建）
+├── .env                       # 环境变量配置（需要创建）
+├── ai/                        # AI模块
+│   ├── __init__.py
+│   ├── function_tools.py      # Function Calling工具定义
+│   ├── intent.py              # 意图分析
+│   ├── image.py               # 图片分析
+│   ├── decompose.py           # 任务拆解
+│   └── response.py            # 响应生成
+├── todo/                      # Microsoft To Do模块
+│   ├── __init__.py
+│   ├── core.py                # 核心API操作
+│   ├── compat.py              # 兼容性方法
+│   └── token_manager.py       # 令牌管理
+├── utils/                     # 工具模块
+│   ├── __init__.py
+│   └── datetime_helper.py     # 时间处理工具
+├── handlers/                  # Telegram消息处理器
+│   ├── __init__.py
+│   ├── command.py             # 命令处理
+│   ├── message.py             # 消息处理
+│   ├── token.py               # 令牌管理命令
+│   ├── callback.py            # 回调处理
+│   ├── inline.py              # 内联查询处理
+│   └── esp32.py               # ESP32相关处理
+├── esp32_server/              # ESP32服务端
+│   ├── __init__.py
+│   ├── routes.py              # API路由
+│   ├── utils.py               # 工具函数
+│   └── auth.py                # 认证中间件
+└── service/                   # Systemd服务配置
+    └── todobot.service        # 服务单元文件
 ```
 
 ## 技术架构
 
 1. **Telegram Bot** - 处理用户输入和交互
-2. **AI Service** - 使用 ChatGPT 进行语义分析
+2. **AI Service (Function Calling)** - 使用OpenAI Function Calling进行结构化语义分析
+   - Intent Analysis - 意图识别和任务提取
+   - Task Matching - 智能任务匹配
+   - Image Analysis - 两步图片分析（Vision + FC）
+   - Task Decomposition - 复杂任务拆解
 3. **Microsoft Graph Client** - 直接与 Microsoft Graph API 通信
-4. **Config Management** - 统一的配置管理
-5. **OAuth Helper** - 自动化令牌获取和刷新
+4. **Time Helper** - 智能时间解析和验证
+5. **Config Management** - 统一的配置管理
+6. **OAuth Helper** - 自动化令牌获取和刷新
+7. **ESP32 Server** - 可选的硬件看板API服务
 
 ## 令牌管理
 
@@ -266,8 +316,15 @@ MIT License
 
 ## 相关链接
 
+- [ESP32-S3 Microsoft To Do Dashboard](https://github.com/Shattered217/ESP32-S3-MSToDo-Dash) - 配套ESP32硬件看板项目
 - [Microsoft Graph API](https://docs.microsoft.com/en-us/graph/api/resources/todo-overview)
 - [Azure App Registration](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 - [Telegram Bot API](https://core.telegram.org/bots/api)
 - [OpenAI API](https://platform.openai.com/docs)
 - [microsoft-todo-mcp-server](https://github.com/jordanburke/microsoft-todo-mcp-server)
+
+---
+
+## ⭐ 支持项目
+
+如果这个项目对你有帮助，欢迎给个 Star ⭐！这对我非常重要~

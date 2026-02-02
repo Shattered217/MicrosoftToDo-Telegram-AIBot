@@ -37,8 +37,23 @@ class DecomposeMixin:
         return has_complex_pattern or (is_long_title and low_confidence)
     
     async def decompose_task(self, task_description: str) -> Dict[str, Any]:
-        """将复杂任务拆解为子任务列表"""
-        system_prompt = self._get_decompose_prompt()
+        """将复杂任务拆解为子任务列表（使用Function Calling）"""
+        import json
+        from datetime import datetime
+        from ai.function_tools import get_decompose_tools
+        
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        tools = get_decompose_tools(current_time)
+        
+        system_prompt = """你是一个智能任务拆解助手。
+将复杂任务拆解为多个可执行的子任务。
+
+拆解原则：
+1. 子任务按逻辑顺序排列
+2. 每个子任务都应具体可执行
+3. 合理设置优先级和截止日期
+4. 提供拆解思路说明"""
 
         user_prompt = f"请拆解以下任务：{task_description}"
         
@@ -51,24 +66,31 @@ class DecomposeMixin:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
+                    tools=tools,
+                    tool_choice="auto",
                     temperature=0.5,
-                    max_tokens=1200,
-                    response_format={"type": "json_object"} if "gpt-4" in self.model.lower() else None
+                    max_tokens=1200
                 )
                 
-                content = response.choices[0].message.content
-                result = self._robust_json_parse(content)
+                message = response.choices[0].message
                 
-                if result and 'subtasks' in result and len(result['subtasks']) > 0:
+                if message.tool_calls:
+                    tool_call = message.tool_calls[0]
+                    result = json.loads(tool_call.function.arguments)
+                    
                     logger.info(f"任务拆解成功，生成 {len(result['subtasks'])} 个子任务")
+                    logger.info(f"拆解理由: {result.get('reasoning', 'N/A')}")
+                    
                     return {
                         "action": "DECOMPOSE",
-                        "original_task": task_description,
+                        "original_task": result['original_task'],
                         "subtasks": result['subtasks'],
                         "estimated_total_days": result.get('estimated_total_days', 7),
                         "reasoning": result.get('reasoning', ''),
                         "confidence": 0.9
                     }
+                else:
+                    logger.warning("AI未调用function")
                     
             except Exception as e:
                 logger.warning(f"任务拆解失败 (尝试 {attempt+1}): {e}")
@@ -82,6 +104,7 @@ class DecomposeMixin:
             "title": task_description[:30],
             "confidence": 0.3
         }
+
     
     def format_decompose_message(self, analysis: Dict[str, Any]) -> str:
         """格式化拆解结果为用户友好的消息"""

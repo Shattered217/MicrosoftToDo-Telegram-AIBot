@@ -5,6 +5,8 @@
 import logging
 from typing import Dict, Any, List
 
+from config import Config
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,15 +32,16 @@ class CompatMixin:
         if not list_id:
             return {"error": "没有找到可用的任务列表"}
         
+        from utils.datetime_helper import to_utc_iso
+        
         due_datetime = None
         if due_date:
-            due_datetime = self._convert_to_utc_iso(due_date, "23:59")
+            due_datetime = to_utc_iso(due_date, "23:59", Config.TIMEZONE)
         
         reminder_datetime = None
-        if reminder_date and reminder_time:
-            reminder_datetime = self._convert_to_utc_iso(reminder_date, reminder_time)
-        elif reminder_date:
-            reminder_datetime = self._convert_to_utc_iso(reminder_date, "09:00")
+        if reminder_date:
+            time_part = reminder_time or "09:00"
+            reminder_datetime = to_utc_iso(reminder_date, time_part, Config.TIMEZONE)
         
         return await self.create_task_with_reminder(list_id, title, description, due_datetime, reminder_datetime)
     
@@ -96,18 +99,19 @@ class CompatMixin:
         if not list_id:
             return {"error": "找不到任务所在的列表"}
         
+        from utils.datetime_helper import to_utc_iso
+        
         reminder_datetime = None
-        if reminder_date and reminder_time:
-            reminder_datetime = f"{reminder_date}T{reminder_time}:00"
-        elif reminder_date:
-            reminder_datetime = f"{reminder_date}T09:00:00"
+        if reminder_date:
+            time_part = reminder_time or "09:00"
+            reminder_datetime = to_utc_iso(reminder_date, time_part, Config.TIMEZONE)
         
         formatted_due_date = None
         if due_date:
-            if 'T' not in due_date:
-                formatted_due_date = f"{due_date}T00:00:00"
-            else:
+            if 'T' in due_date:
                 formatted_due_date = due_date
+            else:
+                formatted_due_date = to_utc_iso(due_date, "00:00", Config.TIMEZONE)
         
         return await self.update_task(
             list_id, 

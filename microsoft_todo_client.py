@@ -52,28 +52,6 @@ class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin, CompatMixin):
         _token_cache["access_token"] = self.access_token
         _token_cache["refresh_token"] = self.refresh_token
     
-    def _convert_to_utc_iso(self, date_str: str, time_str: str = None) -> str:
-        """将本地日期时间转换为UTC ISO格式"""
-        try:
-            if time_str:
-                dt_str = f"{date_str} {time_str}"
-                local_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
-            else:
-                local_dt = datetime.strptime(date_str, "%Y-%m-%d")
-            
-            local_dt = self.local_tz.localize(local_dt)
-            
-            utc_dt = local_dt.astimezone(self.utc_tz)
-            
-            return utc_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
-            
-        except Exception as e:
-            logger.error(f"时区转换失败: {e}")
-            if time_str:
-                return f"{date_str}T{time_str}:00.000Z"
-            else:
-                return f"{date_str}T00:00:00.000Z"
-        
     async def _ensure_session(self):
         """确保HTTP会话存在且绑定到当前 event loop"""
         try:

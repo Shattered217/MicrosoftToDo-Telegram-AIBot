@@ -203,7 +203,6 @@ MicrosoftToDo-Telegram-AIBot/
 ├── pyproject.toml             # uv项目配置
 ├── env_example.txt            # 环境变量示例
 ├── README.md                  # 项目说明
-├── Dockerfile                 # Docker配置
 ├── .gitignore                 # Git忽略文件
 ├── .env                       # 环境变量配置（需要创建）
 ├── ai/                        # AI模块
@@ -292,23 +291,6 @@ screen -S todobot
 python3 main.py
 # Ctrl+A, D 分离会话
 ```
-
-### Docker 部署（可选）
-
-```bash
-# 构建镜像
-docker build -t todobot .
-
-# 运行容器
-docker run -d --name todobot --env-file .env todobot
-```
-
-### CI/CD 自动部署 (推荐)
-
-本项目支持通过 GitHub Actions 进行自动部署。
-
-1.  **工作流**: 代码推送到 `main` 分支 -> GitHub Actions 自动连接服务器 -> 拉取最新代码 -> 使用 `uv` 安装依赖 -> 重启 Systemd 服务。
-2.  **配置方法**: 请查看 [SERVER_SETUP.md](SERVER_SETUP.md) 获取详细的服务器配置和密钥设置指南。
 
 ## 许可证
 

@@ -68,28 +68,30 @@ class IntentMixin:
                     
                     logger.info(f"AI推断理由: {result.get('reasoning', 'N/A')}")
                     
-                    from utils.datetime_helper import normalize_reminder, normalize_due_date
+                    from utils.datetime_helper import calculate_relative_time
                     from datetime import datetime
                     
                     now = datetime.now()
                     
-                    if result.get('due_date'):
-                        normalized_due = normalize_due_date(result['due_date'], now)
-                        if normalized_due:
-                            result['due_date'] = normalized_due
-                        else:
-                            result['due_date'] = None
+                    if result.get('due_in_days') is not None:
+                        date_str, _ = calculate_relative_time(now, days=result['due_in_days'])
+                        result['due_date'] = date_str
+                        logger.info(f"使用相对时间: due_in_days={result['due_in_days']} -> {date_str}")
                     
-                    reminder_date = result.get('reminder_date')
-                    reminder_time = result.get('reminder_time')
-                    if reminder_date:
-                        reminder_info = normalize_reminder(reminder_date, reminder_time or '09:00', now)
-                        if reminder_info:
-                            result['reminder_date'] = reminder_info.date
-                            result['reminder_time'] = reminder_info.time
-                        else:
-                            result['reminder_date'] = None
-                            result['reminder_time'] = None
+                    if (result.get('reminder_in_days') is not None or 
+                        result.get('reminder_in_hours') is not None or 
+                        result.get('reminder_in_minutes') is not None):
+                        date_str, time_str = calculate_relative_time(
+                            now,
+                            days=result.get('reminder_in_days', 0),
+                            hours=result.get('reminder_in_hours', 0),
+                            minutes=result.get('reminder_in_minutes', 0)
+                        )
+                        result['reminder_date'] = date_str
+                        result['reminder_time'] = time_str
+                        logger.info(f"使用相对时间: {result.get('reminder_in_days', 0)}天"
+                                  f"{result.get('reminder_in_hours', 0)}小时"
+                                  f"{result.get('reminder_in_minutes', 0)}分钟 -> {date_str} {time_str}")
                     
                     return result
                     
@@ -147,28 +149,30 @@ class IntentMixin:
                 final_result = initial_analysis.copy()
                 final_result.update(result)
                 
-                from utils.datetime_helper import normalize_reminder, normalize_due_date
+                from utils.datetime_helper import calculate_relative_time
                 from datetime import datetime
                 
                 now = datetime.now()
                 
-                if final_result.get('due_date'):
-                    normalized_due = normalize_due_date(final_result['due_date'], now)
-                    if normalized_due:
-                        final_result['due_date'] = normalized_due
-                    else:
-                        final_result['due_date'] = None
+                if final_result.get('due_in_days') is not None:
+                    date_str, _ = calculate_relative_time(now, days=final_result['due_in_days'])
+                    final_result['due_date'] = date_str
+                    logger.info(f"使用相对时间: due_in_days={final_result['due_in_days']} -> {date_str}")
                 
-                reminder_date = final_result.get('reminder_date')
-                reminder_time = final_result.get('reminder_time')
-                if reminder_date:
-                    reminder_info = normalize_reminder(reminder_date, reminder_time or '09:00', now)
-                    if reminder_info:
-                        final_result['reminder_date'] = reminder_info.date
-                        final_result['reminder_time'] = reminder_info.time
-                    else:
-                        final_result['reminder_date'] = None
-                        final_result['reminder_time'] = None
+                if (final_result.get('reminder_in_days') is not None or
+                    final_result.get('reminder_in_hours') is not None or
+                    final_result.get('reminder_in_minutes') is not None):
+                    date_str, time_str = calculate_relative_time(
+                        now,
+                        days=final_result.get('reminder_in_days', 0),
+                        hours=final_result.get('reminder_in_hours', 0),
+                        minutes=final_result.get('reminder_in_minutes', 0)
+                    )
+                    final_result['reminder_date'] = date_str
+                    final_result['reminder_time'] = time_str
+                    logger.info(f"使用相对时间: {final_result.get('reminder_in_days', 0)}天"
+                              f"{final_result.get('reminder_in_hours', 0)}小时"
+                              f"{final_result.get('reminder_in_minutes', 0)}分钟 -> {date_str} {time_str}")
                 
                 return final_result
             else:

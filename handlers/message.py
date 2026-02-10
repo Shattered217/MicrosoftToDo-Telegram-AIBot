@@ -51,7 +51,8 @@ class MessageHandlers:
 
             if (analysis.get('action') == 'CREATE' and 
                 self.ai_service._should_suggest_decompose(user_text, analysis)):
-                decompose_result = await self.ai_service.decompose_task(user_text)
+                total_days = analysis.get('due_in_days')
+                decompose_result = await self.ai_service.decompose_task(user_text, total_days)
                 
                 if decompose_result.get('action') == 'DECOMPOSE':
                     self.pending_decompose[user_id] = decompose_result

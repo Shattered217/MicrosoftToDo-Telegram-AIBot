@@ -99,7 +99,7 @@ class CompatMixin:
         if not list_id:
             return {"error": "找不到任务所在的列表"}
         
-        from utils.datetime_helper import to_utc_iso
+        from utils.datetime_helper import to_utc_iso, format_for_api
         
         reminder_datetime = None
         if reminder_date:
@@ -111,7 +111,8 @@ class CompatMixin:
             if 'T' in due_date:
                 formatted_due_date = due_date
             else:
-                formatted_due_date = to_utc_iso(due_date, "00:00", Config.TIMEZONE)
+                # 使用23:59作为截止时间，避免时区转换导致日期减一
+                formatted_due_date = to_utc_iso(due_date, "23:59", Config.TIMEZONE)
         
         return await self.update_task(
             list_id, 

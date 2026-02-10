@@ -10,6 +10,41 @@ logger = logging.getLogger(__name__)
 class TokenManagerMixin:
     """Token刷新管理混入类"""
     
+    def _save_tokens_to_env(self, access_token: str, refresh_token: str = None) -> bool:
+        """将token保存到.env文件"""
+        try:
+            env_lines = []
+            try:
+                with open('.env', 'r', encoding='utf-8') as f:
+                    env_lines = f.readlines()
+            except FileNotFoundError:
+                logger.warning(".env文件不存在，将创建新文件")
+            
+            access_token_found = False
+            refresh_token_found = False
+            
+            for i, line in enumerate(env_lines):
+                if line.startswith('MS_TODO_ACCESS_TOKEN='):
+                    env_lines[i] = f'MS_TODO_ACCESS_TOKEN={access_token}\n'
+                    access_token_found = True
+                elif line.startswith('MS_TODO_REFRESH_TOKEN=') and refresh_token:
+                    env_lines[i] = f'MS_TODO_REFRESH_TOKEN={refresh_token}\n'
+                    refresh_token_found = True
+            
+            if not access_token_found:
+                env_lines.append(f'MS_TODO_ACCESS_TOKEN={access_token}\n')
+            if not refresh_token_found and refresh_token:
+                env_lines.append(f'MS_TODO_REFRESH_TOKEN={refresh_token}\n')
+            
+            with open('.env', 'w', encoding='utf-8') as f:
+                f.writelines(env_lines)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"保存Token到.env失败: {e}")
+            return False
+    
     async def _refresh_access_token(self) -> bool:
         """刷新访问令牌"""
         if not self.refresh_token:
@@ -49,11 +84,15 @@ class TokenManagerMixin:
                 if response.status == 200:
                     token_data = await response.json()
                     self.access_token = token_data.get("access_token")
-                    if "refresh_token" in token_data:
-                        self.refresh_token = token_data["refresh_token"]
+                    new_refresh_token = token_data.get("refresh_token")
+                    
+                    if new_refresh_token:
+                        self.refresh_token = new_refresh_token
                     
                     if hasattr(self, '_update_token_cache'):
                         self._update_token_cache()
+                    
+                    self._save_tokens_to_env(self.access_token, self.refresh_token if new_refresh_token else None)
                     
                     logger.info("访问令牌刷新成功")
                     return True

@@ -36,7 +36,7 @@ class DecomposeMixin:
         
         return has_complex_pattern or (is_long_title and low_confidence)
     
-    async def decompose_task(self, task_description: str) -> Dict[str, Any]:
+    async def decompose_task(self, task_description: str, total_days: int = None) -> Dict[str, Any]:
         """将复杂任务拆解为子任务列表（使用Function Calling）"""
         import json
         from datetime import datetime
@@ -44,7 +44,7 @@ class DecomposeMixin:
         
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        tools = get_decompose_tools(current_time)
+        tools = get_decompose_tools(current_time, total_days)
         
         system_prompt = """你是一个智能任务拆解助手。
 将复杂任务拆解为多个可执行的子任务。
@@ -53,9 +53,13 @@ class DecomposeMixin:
 1. 子任务按逻辑顺序排列
 2. 每个子任务都应具体可执行
 3. 合理设置优先级和截止日期
-4. 提供拆解思路说明"""
+4. 提供拆解思路说明
+5. **重要**：所有子任务的累计时间不能超过原始任务的总时长！"""
 
-        user_prompt = f"请拆解以下任务：{task_description}"
+        if total_days:
+            user_prompt = f"请拆解以下任务：{task_description}\n\n原始任务总时长：{total_days}天。请确保所有子任务的累计时间不超过{total_days}天！"
+        else:
+            user_prompt = f"请拆解以下任务：{task_description}"
         
         max_retries = 2
         for attempt in range(max_retries + 1):
@@ -80,6 +84,26 @@ class DecomposeMixin:
                     
                     logger.info(f"任务拆解成功，生成 {len(result['subtasks'])} 个子任务")
                     logger.info(f"拆解理由: {result.get('reasoning', 'N/A')}")
+                    
+                    from utils.datetime_helper import calculate_relative_time
+                    from datetime import datetime
+                    now = datetime.now()
+                    
+                    # 累加天数
+                    accumulated_days = 0
+                    
+                    for subtask in result['subtasks']:
+                        if subtask.get('due_in_days') is not None:
+                            days = subtask['due_in_days']
+                            accumulated_days += days
+                            
+                            if accumulated_days > 0:
+                                date_str, time_str = calculate_relative_time(now, days=accumulated_days, hours=9)
+                            else:
+                                date_str, time_str = calculate_relative_time(now, days=0)
+                            
+                            subtask['due_date'] = date_str
+                            logger.info(f"子任务 '{subtask['title']}': 需要{days}天, 累计{accumulated_days}天 -> {date_str} {time_str}")
                     
                     return {
                         "action": "DECOMPOSE",

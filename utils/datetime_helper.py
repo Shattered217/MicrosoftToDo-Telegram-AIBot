@@ -1,215 +1,22 @@
 """
-统一的日期时间处理模块
+相对时间处理模块
 
-该模块提供集中化的时间处理功能，包括：
-- 日期时间验证
-- 格式规范化
+该模块提供相对时间计算和API格式化功能：
+- 相对时间计算（几天/小时/分钟后）
 - 时区转换
-- 智能时间调整
+- API格式化
 
 设计原则：
-- 所有函数返回明确的类型或None，不做隐式转换
-- 验证失败返回None，不抛出异常（调用方决定如何处理）
-- 时间调整逻辑可配置
+- 使用相对时间而非绝对时间，避免AI推断错误
+- 所有函数返回明确的类型，不做隐式转换
 """
 
 import logging
-from dataclasses import dataclass
-from datetime import datetime, timedelta, time as time_type
-from typing import Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Tuple
 import pytz
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class DateTimeInfo:
-    """统一的日期时间信息数据类"""
-    date: str  # YYYY-MM-DD格式
-    time: str  # HH:MM格式
-    datetime_str: str  # YYYY-MM-DDTHH:MM:SS格式
-
-
-def validate_date(date_str: str) -> Optional[datetime]:
-    """
-    验证日期字符串格式
-    
-    Args:
-        date_str: 日期字符串，期望格式 YYYY-MM-DD
-        
-    Returns:
-        datetime对象如果格式正确，否则返回None
-    """
-    if not date_str:
-        return None
-    
-    try:
-        dt = datetime.strptime(date_str, '%Y-%m-%d')
-        return dt
-    except ValueError:
-        logger.warning(f"无效的日期格式: {date_str}，期望格式: YYYY-MM-DD")
-        return None
-
-
-def validate_time(time_str: str) -> Optional[time_type]:
-    """
-    验证时间字符串格式
-    
-    Args:
-        time_str: 时间字符串，期望格式 HH:MM
-        
-    Returns:
-        time对象如果格式正确，否则返回None
-    """
-    if not time_str:
-        return None
-    
-    try:
-        t = datetime.strptime(time_str, '%H:%M').time()
-        return t
-    except ValueError:
-        logger.warning(f"无效的时间格式: {time_str}，期望格式: HH:MM")
-        return None
-
-
-def adjust_past_datetime(dt: datetime, now: datetime, 
-                        default_offset_minutes: int = 30) -> datetime:
-    """
-    如果日期时间在过去，自动调整到未来
-    
-    Args:
-        dt: 要检查的日期时间
-        now: 当前时间
-        default_offset_minutes: 如果在过去，向后推迟的分钟数（默认30分钟）
-        
-    Returns:
-        调整后的日期时间
-    """
-    if dt <= now:
-        adjusted = now + timedelta(minutes=default_offset_minutes)
-        logger.info(f"时间已过去，自动调整为{default_offset_minutes}分钟后: "
-                   f"{dt.strftime('%Y-%m-%d %H:%M')} -> {adjusted.strftime('%Y-%m-%d %H:%M')}")
-        return adjusted
-    return dt
-
-
-def normalize_reminder(reminder_date: str, reminder_time: str, 
-                      now: datetime, auto_adjust: bool = False) -> Optional[DateTimeInfo]:
-    """
-    规范化提醒时间
-    
-    验证日期和时间格式
-    
-    Args:
-        reminder_date: 提醒日期字符串 (YYYY-MM-DD)
-        reminder_time: 提醒时间字符串 (HH:MM)
-        now: 当前时间
-        auto_adjust: 是否自动调整过去的时间（默认False，让AI负责推断正确时间）
-        
-    Returns:
-        DateTimeInfo对象如果验证成功，否则返回None
-    """
-    date_obj = validate_date(reminder_date)
-    if not date_obj:
-        return None
-    
-    time_obj = validate_time(reminder_time)
-    if not time_obj:
-        return None
-    
-    try:
-        reminder_datetime = datetime.combine(date_obj.date(), time_obj)
-        
-        if auto_adjust and reminder_datetime <= now:
-            adjusted = adjust_past_datetime(reminder_datetime, now)
-            reminder_date = adjusted.strftime('%Y-%m-%d')
-            reminder_time = adjusted.strftime('%H:%M')
-            reminder_datetime = adjusted
-        elif reminder_datetime <= now:
-            logger.warning(f"提醒时间在过去: {reminder_date} {reminder_time}，但未启用自动调整")
-        
-        datetime_str = reminder_datetime.strftime('%Y-%m-%dT%H:%M:%S')
-        
-        return DateTimeInfo(
-            date=reminder_date,
-            time=reminder_time,
-            datetime_str=datetime_str
-        )
-    except Exception as e:
-        logger.error(f"规范化提醒时间失败: {e}")
-        return None
-
-
-def normalize_due_date(due_date: str, now: datetime, auto_adjust: bool = False) -> Optional[str]:
-    """
-    规范化提醒时间
-    
-    验证日期和时间格式，如果提醒时间在过去则自动调整
-    
-    Args:
-        reminder_date: 提醒日期字符串 (YYYY-MM-DD)
-        reminder_time: 提醒时间字符串 (HH:MM)
-        now: 当前时间
-        
-    Returns:
-        DateTimeInfo对象如果验证成功，否则返回None
-    """
-    date_obj = validate_date(reminder_date)
-    if not date_obj:
-        return None
-    
-    time_obj = validate_time(reminder_time)
-    if not time_obj:
-        return None
-    
-    try:
-        reminder_datetime = datetime.combine(date_obj.date(), time_obj)
-        
-        if reminder_datetime <= now:
-            adjusted = adjust_past_datetime(reminder_datetime, now)
-            reminder_date = adjusted.strftime('%Y-%m-%d')
-            reminder_time = adjusted.strftime('%H:%M')
-            reminder_datetime = adjusted
-        
-        datetime_str = reminder_datetime.strftime('%Y-%m-%dT%H:%M:%S')
-        
-        return DateTimeInfo(
-            date=reminder_date,
-            time=reminder_time,
-            datetime_str=datetime_str
-        )
-    except Exception as e:
-        logger.error(f"规范化提醒时间失败: {e}")
-        return None
-
-
-def normalize_due_date(due_date: str, now: datetime, auto_adjust: bool = False) -> Optional[str]:
-    """
-    规范化截止日期
-    
-    验证日期格式
-    
-    Args:
-        due_date: 截止日期字符串 (YYYY-MM-DD)
-        now: 当前时间
-        auto_adjust: 是否自动调整过去的日期（默认False，让AI负责推断正确日期）
-        
-    Returns:
-        规范化后的日期字符串 (YYYY-MM-DD) 如果验证成功，否则返回None
-    """
-    date_obj = validate_date(due_date)
-    if not date_obj:
-        return None
-    
-    if auto_adjust and date_obj.date() < now.date():
-        adjusted_date = (now + timedelta(days=1)).strftime('%Y-%m-%d')
-        logger.info(f"截止日期在过去，自动调整为明天: {due_date} -> {adjusted_date}")
-        return adjusted_date
-    elif date_obj.date() < now.date():
-        logger.warning(f"截止日期在过去: {due_date}，但未启用自动调整")
-    
-    return due_date
-
 
 
 def to_utc_iso(local_date: str, local_time: str, timezone: str) -> str:
@@ -262,3 +69,55 @@ def format_for_api(date_str: str, time_str: str, timezone: str) -> dict:
         "dateTime": datetime_str,
         "timeZone": timezone
     }
+
+
+def calculate_relative_time(
+    now: datetime,
+    days: int = 0,
+    hours: int = 0,
+    minutes: int = 0
+) -> Tuple[str, str]:
+    """
+    根据相对时间计算绝对时间
+    
+    时间基线规则：
+    - 当天任务(days=0): 以现在为基线，hours/minutes是相对偏移
+    - 跨天任务(days≥1): 以目标日的0点为基线，hours表示当天的几点(0-23)
+    
+    Args:
+        now: 当前时间
+        days: 几天后（0表示今天）
+        hours: 当天任务-相对现在几小时；跨天任务-当天的几点(0-23)
+        minutes: 分钟数
+        
+    Returns:
+        (date_str, time_str): 例如 ("2026-02-13", "09:00")
+        
+    Examples:
+        >>> now = datetime(2026, 2, 10, 23, 30)
+        
+        # 当天任务：2小时后
+        >>> calculate_relative_time(now, days=0, hours=2)
+        ("2026-02-11", "01:30")  # 以现在为基线
+        
+        # 跨天任务：3天后9点
+        >>> calculate_relative_time(now, days=3, hours=9)
+        ("2026-02-13", "09:00")  # 以0点为基线
+    """
+    if days == 0:
+        # 当天任务：以现在为基线
+        target_datetime = now + timedelta(hours=hours, minutes=minutes)
+        logger.debug(f"当天任务：现在+{hours}小时{minutes}分钟 = {target_datetime}")
+    else:
+        # 跨天任务：以目标日的0点为基线
+        target_date = now.date() + timedelta(days=days)
+        target_datetime = datetime.combine(target_date, datetime.min.time())
+        target_datetime = target_datetime + timedelta(hours=hours, minutes=minutes)
+        logger.debug(f"跨天任务：{days}天后的{hours}点{minutes}分 = {target_datetime}")
+    
+    date_str = target_datetime.strftime('%Y-%m-%d')
+    time_str = target_datetime.strftime('%H:%M')
+    
+    logger.debug(f"相对时间计算: days={days}, hours={hours}, minutes={minutes} -> {date_str} {time_str}")
+    
+    return date_str, time_str

@@ -159,26 +159,41 @@ class ImageMixin:
                     from datetime import datetime
                     
                     now = datetime.now()
+                    current_time_str = now.strftime("%Y-%m-%d %H:%M")
+                    
+                    # AI校验
+                    if result.get('reminder_in_days') == 0 and result.get('reminder_in_hours') is not None:
+                        from ai.time_validator import validate_reminder_time
+                        result['reminder_in_days'] = await validate_reminder_time(
+                            client=self.client,
+                            model=self.model,
+                            current_time=current_time_str,
+                            reminder_in_days=0,
+                            reminder_in_hours=result['reminder_in_hours'],
+                            reminder_in_minutes=result.get('reminder_in_minutes', 0),
+                        )
                     
                     if result.get('due_in_days') is not None:
                         date_str, _ = calculate_relative_time(now, days=result['due_in_days'])
                         result['due_date'] = date_str
-                        logger.info(f"使用相对时间: due_in_days={result['due_in_days']} -> {date_str}")
+                        logger.info(f"时间计算: due_in_days={result['due_in_days']} -> {date_str}")
                     
-                    if (result.get('reminder_in_days') is not None or
-                        result.get('reminder_in_hours') is not None or
-                        result.get('reminder_in_minutes') is not None):
+                    if result.get('reminder_in_days') is not None or result.get('reminder_in_hours') is not None:
+                        r_days = result.get('reminder_in_days', 0)
+                        r_hours = result.get('reminder_in_hours')
+                        r_minutes = result.get('reminder_in_minutes', 0)
                         date_str, time_str = calculate_relative_time(
                             now,
-                            days=result.get('reminder_in_days', 0),
-                            hours=result.get('reminder_in_hours', 0),
-                            minutes=result.get('reminder_in_minutes', 0)
+                            days=r_days,
+                            hours=r_hours if r_hours is not None else 0,
+                            minutes=r_minutes
                         )
                         result['reminder_date'] = date_str
-                        result['reminder_time'] = time_str
-                        logger.info(f"使用相对时间: {result.get('reminder_in_days', 0)}天"
-                                  f"{result.get('reminder_in_hours', 0)}小时"
-                                  f"{result.get('reminder_in_minutes', 0)}分钟 -> {date_str} {time_str}")
+                        if r_hours is not None:
+                            result['reminder_time'] = time_str
+                        logger.info(f"时间计算: {r_days}天后"
+                                  f"{r_hours if r_hours is not None else '?'}点"
+                                  f"{r_minutes}分 -> {date_str} {time_str if r_hours is not None else '(time=compat局默认)'}")
                     
                     result['image_description'] = image_description[:200]
                     

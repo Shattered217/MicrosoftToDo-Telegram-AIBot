@@ -1,13 +1,14 @@
 """
-相对时间处理模块
+时间处理模块
 
-该模块提供相对时间计算和API格式化功能：
-- 相对时间计算（几天/小时/分钟后）
+该模块提供时间计算和API格式化功能：
+- 绝对时间计算（days天后的hours点minutes分）
 - 时区转换
 - API格式化
 
 设计原则：
-- 使用相对时间而非绝对时间，避免AI推断错误
+- hours 统一为绝对时间（0-23点），不做相对偏移
+- AI 在 Prompt 阶段算好具体几点，本模块只做日期偏移 + 绝对时间拼接
 - 所有函数返回明确的类型，不做隐式转换
 """
 
@@ -78,46 +79,76 @@ def calculate_relative_time(
     minutes: int = 0
 ) -> Tuple[str, str]:
     """
-    根据相对时间计算绝对时间
+    根据天数偏移和绝对时间计算目标日期时间
     
-    时间基线规则：
-    - 当天任务(days=0): 以现在为基线，hours/minutes是相对偏移
-    - 跨天任务(days≥1): 以目标日的0点为基线，hours表示当天的几点(0-23)
+    统一规则（无特殊分支）：
+    - days: 几天后（0=今天, 1=明天, ...）
+    - hours: 目标日当天的几点（0-23），绝对时间
+    - minutes: 目标时间的分钟数（0-59）
+    
+    AI 在 Prompt 阶段已算好具体几点，本函数不做加减法推断。
     
     Args:
         now: 当前时间
         days: 几天后（0表示今天）
-        hours: 当天任务-相对现在几小时；跨天任务-当天的几点(0-23)
-        minutes: 分钟数
+        hours: 当天的几点(0-23)，绝对时间
+        minutes: 分钟数(0-59)
         
     Returns:
-        (date_str, time_str): 例如 ("2026-02-13", "09:00")
+        (date_str, time_str): 例如 ("2026-02-18", "15:00")
         
     Examples:
-        >>> now = datetime(2026, 2, 10, 23, 30)
+        >>> now = datetime(2026, 2, 18, 23, 30)
         
-        # 当天任务：2小时后
-        >>> calculate_relative_time(now, days=0, hours=2)
-        ("2026-02-11", "01:30")  # 以现在为基线
+        # 今天下午3点（即使现在是23:30，仍返回今天15:00）
+        >>> calculate_relative_time(now, days=0, hours=15)
+        ("2026-02-18", "15:00")
         
-        # 跨天任务：3天后9点
-        >>> calculate_relative_time(now, days=3, hours=9)
-        ("2026-02-13", "09:00")  # 以0点为基线
+        # 明天上午9点
+        >>> calculate_relative_time(now, days=1, hours=9)
+        ("2026-02-19", "09:00")
+        
+        # 3天后下午2点半
+        >>> calculate_relative_time(now, days=3, hours=14, minutes=30)
+        ("2026-02-21", "14:30")
     """
-    if days == 0:
-        # 当天任务：以现在为基线
-        target_datetime = now + timedelta(hours=hours, minutes=minutes)
-        logger.debug(f"当天任务：现在+{hours}小时{minutes}分钟 = {target_datetime}")
-    else:
-        # 跨天任务：以目标日的0点为基线
-        target_date = now.date() + timedelta(days=days)
-        target_datetime = datetime.combine(target_date, datetime.min.time())
-        target_datetime = target_datetime + timedelta(hours=hours, minutes=minutes)
-        logger.debug(f"跨天任务：{days}天后的{hours}点{minutes}分 = {target_datetime}")
+    target_date = now.date() + timedelta(days=days)
+    target_datetime = datetime.combine(target_date, datetime.min.time())
+    target_datetime = target_datetime + timedelta(hours=hours, minutes=minutes)
     
     date_str = target_datetime.strftime('%Y-%m-%d')
     time_str = target_datetime.strftime('%H:%M')
     
-    logger.debug(f"相对时间计算: days={days}, hours={hours}, minutes={minutes} -> {date_str} {time_str}")
+    logger.debug(f"时间计算: days={days}, hours={hours}, minutes={minutes} -> {date_str} {time_str}")
     
     return date_str, time_str
+
+
+def to_local_date(utc_iso: str, timezone: str = None) -> 'date':
+    """
+    将 Microsoft Graph API 返回的 UTC ISO 字符串转换为本地日期。
+
+    Args:
+        utc_iso: UTC 时间字符串，例如 "2026-02-20T00:00:00.0000000"
+        timezone: 时区字符串，默认读取 Config.TIMEZONE
+
+    Returns:
+        本地日期 (datetime.date)
+    """
+    from datetime import date as date_type
+    try:
+        if timezone is None:
+            from config import Config
+            timezone = Config.TIMEZONE
+        dt_str = utc_iso[:19].replace('T', ' ')
+        utc_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+        utc_dt = pytz.utc.localize(utc_dt)
+        local_dt = utc_dt.astimezone(pytz.timezone(timezone))
+        return local_dt.date()
+    except Exception as e:
+        logger.error(f"to_local_date 转换失败: {e}, utc_iso={utc_iso}")
+        # fallback
+        try:
+            return datetime.strptime(utc_iso[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None

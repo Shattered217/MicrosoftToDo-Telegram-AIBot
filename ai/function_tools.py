@@ -11,21 +11,33 @@ def get_task_analysis_tools(current_time: str):
     current_date = now.strftime("%Y-%m-%d")
     current_hour = now.hour
     
+    # 过期示例
+    past_example_hour = (current_hour - 2) % 24
+    future_example_hour = (current_hour + 2) % 24
+    
     return [{
         "type": "function",
         "function": {
             "name": "analyze_task_intent",
-            "description": f"分析用户的任务意图。当前时间{current_time}({current_hour}点)。时间规则：当天任务(days=0)以现在为基线用hours/minutes；跨天任务(days≥1)以0点为基线，hours表示当天几点(如reminder_in_days:3, reminder_in_hours:9表示3天后9点)",
+            "description": f"分析用户的任务意图。当前时间{current_time}（{current_hour}点）。"
+                f"时间规则："
+                f"1) days=几天后(0=今天,1=明天)；"
+                f"2) hours=目标日当天的绝对时间(0-23)，如'下午3点'→hours=15；"
+                f"3) ⚠️关键规则：必须判断时间是否已过！现在是{current_hour}点，"
+                f"如果用户说的时间≤{current_hour}点且没说'明天'，则该时间今天已过，必须设days=1（明天）。"
+                f"举例：现在{current_hour}点，用户说'{past_example_hour}点提醒'→已过→days=1,hours={past_example_hour}；"
+                f"用户说'{future_example_hour}点提醒'→未过→days=0,hours={future_example_hour}。"
+                f"严禁把已过的时间设为days=0！",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {"type": "string", "enum": ["CREATE", "UPDATE", "COMPLETE", "DELETE", "LIST", "SEARCH"]},
                     "title": {"type": "string"},
                     "description": {"type": "string"},
-                    "due_in_days": {"type": "integer", "description": "截止日期是几天后（0表示今天）", "minimum": 0},
-                    "reminder_in_days": {"type": "integer", "description": "提醒日期是几天后（0表示今天）", "minimum": 0},
-                    "reminder_in_hours": {"type": "integer", "description": "当天任务：相对现在几小时；跨天任务：当天的几点(0-23)", "minimum": 0, "maximum": 23},
-                    "reminder_in_minutes": {"type": "integer", "description": "分钟数", "minimum": 0, "maximum": 59},
+                    "due_in_days": {"type": "integer", "description": "截止日期是几天后（0=今天，1=明天）", "minimum": 0},
+                    "reminder_in_days": {"type": "integer", "description": f"提醒日期是几天后（0=今天，1=明天）。⚠️如果提醒时间(hours)<={current_hour}且用户没说明天，必须设为1", "minimum": 0},
+                    "reminder_in_hours": {"type": "integer", "description": "提醒时间：目标日当天的几点(0-23)，绝对时间。如'下午3点'=15，'晚上8点'=20。⚠️只有用户明确说了具体时间才填，否则不要填", "minimum": 0, "maximum": 23},
+                    "reminder_in_minutes": {"type": "integer", "description": "提醒时间的分钟数", "minimum": 0, "maximum": 59},
                     "search_query": {"type": "string"},
                     "todo_id": {"type": "string"},
                     "target_description": {"type": "string"},
@@ -41,23 +53,42 @@ def get_task_analysis_tools(current_time: str):
 
 def get_task_match_tools(candidates: list, user_text: str, initial_action: str) -> list:
     """获取任务匹配的Function Calling工具定义"""
-    candidates_str = "\n".join([f"[ID: {t['id']}] {t.get('title', '无标题')}" for t in candidates[:10]])
+    def _fmt_task(t: dict) -> str:
+        parts = [f"[ID: {t['id']}] {t.get('title', '无标题')}"]
+        if t.get('dueDateTime'):
+            dt_val = t['dueDateTime']
+            if isinstance(dt_val, dict):
+                dt_val = dt_val.get('dateTime', '')
+            parts.append(f"截止:{dt_val[:10]}")
+        if t.get('reminderDateTime'):
+            dt_val = t['reminderDateTime']
+            if isinstance(dt_val, dict):
+                dt_val = dt_val.get('dateTime', '')
+            parts.append(f"提醒:{dt_val[:16]}")
+        return " ".join(parts)
+
+    candidates_str = "\n".join([_fmt_task(t) for t in candidates[:10]])
     
     return [{
         "type": "function",
         "function": {
             "name": "resolve_task_match",
-            "description": f"匹配任务。用户输入:{user_text}。候选:\n{candidates_str}",
+            "description": (
+                f"匹配任务并生成修改参数。用户输入:{user_text}。"
+                f"候选任务(含现有日期):\n{candidates_str}。"
+                f"⚠️时间规则：hours是绝对时间(0-23)，如果该时间今天已过必须设days=1。"
+                f"⚠️UPDATE规则：只输出用户明确要修改的字段，未提及的字段必须为null（不要重置现有日期）。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "todo_id": {"type": "string"},
                     "action": {"type": "string", "enum": ["UPDATE", "COMPLETE", "DELETE", "SEARCH"]},
                     "title": {"type": "string"},
-                    "due_in_days": {"type": "integer", "description": "截止日期是几天后", "minimum": 0},
-                    "reminder_in_days": {"type": "integer", "description": "提醒日期是几天后", "minimum": 0},
-                    "reminder_in_hours": {"type": "integer", "description": "当天任务：相对现在几小时；跨天任务：当天的几点", "minimum": 0, "maximum": 23},
-                    "reminder_in_minutes": {"type": "integer", "description": "分钟数", "minimum": 0, "maximum": 59},
+                    "due_in_days": {"type": "integer", "description": "截止日期是几天后（0=今天，1=明天）。⚠️仅当用户明确提到新截止日期时才填，否则必须为null", "minimum": 0},
+                    "reminder_in_days": {"type": "integer", "description": "提醒日期是几天后（0=今天，1=明天）。⚠️仅当用户明确提到提醒日期时才填，否则必须为null", "minimum": 0},
+                    "reminder_in_hours": {"type": "integer", "description": "提醒时间：目标日当天的几点(0-23)，绝对时间", "minimum": 0, "maximum": 23},
+                    "reminder_in_minutes": {"type": "integer", "description": "提醒时间的分钟数", "minimum": 0, "maximum": 59},
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                     "reasoning": {"type": "string"}
                 },
@@ -117,7 +148,7 @@ def get_image_analysis_tools(current_time: str) -> list:
         "type": "function",
         "function": {
             "name": "analyze_image_content",
-            "description": f"分析图片内容提取待办事项。当前{current_time}。时间规则：当天任务以现在为基线，跨天任务以0点为基线！",
+            "description": f"分析图片内容提取待办事项。当前{current_time}。时间规则：days表示几天后(0=今天)，hours统一为目标日当天的绝对时间(0-23点)，AI直接算好具体几点。⚠️如果时间已过今天，必须设days=1。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -128,10 +159,10 @@ def get_image_analysis_tools(current_time: str) -> list:
                     },
                     "title": {"type": "string", "description": "单个任务的标题"},
                     "description": {"type": "string", "description": "任务详细描述"},
-                    "due_in_days": {"type": "integer", "description": "截止日期是几天后", "minimum": 0},
-                    "reminder_in_days": {"type": "integer", "description": "提醒日期是几天后", "minimum": 0},
-                    "reminder_in_hours": {"type": "integer", "description": "当天任务：相对现在几小时；跨天任务：当天的几点", "minimum": 0, "maximum": 23},
-                    "reminder_in_minutes": {"type": "integer", "description": "分钟数", "minimum": 0, "maximum": 59},
+                    "due_in_days": {"type": "integer", "description": "截止日期是几天后（0=今天，1=明天）", "minimum": 0},
+                    "reminder_in_days": {"type": "integer", "description": "提醒日期是几天后（0=今天，1=明天）", "minimum": 0},
+                    "reminder_in_hours": {"type": "integer", "description": "提醒时间：目标日当天的几点(0-23)，绝对时间", "minimum": 0, "maximum": 23},
+                    "reminder_in_minutes": {"type": "integer", "description": "提醒时间的分钟数", "minimum": 0, "maximum": 59},
                     "items": {
                         "type": "array",
                         "description": "如果图片包含多个任务，使用此字段",
@@ -148,6 +179,42 @@ def get_image_analysis_tools(current_time: str) -> list:
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1}
                 },
                 "required": ["action", "confidence"]
+            }
+        }
+    }]
+
+
+def get_time_validation_tools() -> list:
+    """
+    获取时间校验的 Function Calling 工具定义。
+    
+    用于 time_validator.validate_reminder_time()：
+    让 AI 判断 reminder_in_days=0 时指定的时间是否已过，
+    输出修正后的 reminder_in_days（0 保持今天，1 改为明天）。
+    """
+    return [{
+        "type": "function",
+        "function": {
+            "name": "validate_time",
+            "description": (
+                "判断用户设置的提醒时间（今天的某个时刻）是否已经过了当前时间。"
+                "如果已过，reminder_in_days 应为 1（改为明天）；"
+                "如果还没过，reminder_in_days 应为 0（保持今天）。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reminder_in_days": {
+                        "type": "integer",
+                        "enum": [0, 1],
+                        "description": "0=时间未过，保持今天；1=时间已过，改为明天"
+                    },
+                    "reasoning": {
+                        "type": "string",
+                        "description": "简短说明判断依据"
+                    }
+                },
+                "required": ["reminder_in_days", "reasoning"]
             }
         }
     }]

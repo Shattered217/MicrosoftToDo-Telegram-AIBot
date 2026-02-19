@@ -52,6 +52,11 @@ ESP32_SERVER_HOST=0.0.0.0
 # 服务器端口
 ESP32_SERVER_PORT=5000
 
+# ==================== 时区 ====================
+# 用于提醒/截止时间的本地化，默认 Asia/Shanghai
+# 可选值参考: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+#TIMEZONE=Asia/Shanghai
+
 # ==================== 调试模式 ====================
 # 设置为 true 启用详细日志
-debug=false
+DEBUG=false

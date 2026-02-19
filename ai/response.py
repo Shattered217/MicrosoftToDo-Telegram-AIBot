@@ -21,9 +21,6 @@ class ResponseMixin:
             return template_response
         
         try:
-            from datetime import datetime
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-            
             system_prompt = """生成简洁友好的中文回复，确认操作结果。
 
 要求：

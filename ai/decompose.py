@@ -39,10 +39,8 @@ class DecomposeMixin:
     async def decompose_task(self, task_description: str, total_days: int = None) -> Dict[str, Any]:
         """将复杂任务拆解为子任务列表（使用Function Calling）"""
         import json
-        from datetime import datetime
-        from ai.function_tools import get_decompose_tools
-        
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        from utils.datetime_helper import now_local
+        current_time = now_local().strftime("%Y-%m-%d %H:%M")
         
         tools = get_decompose_tools(current_time, total_days)
         
@@ -85,9 +83,8 @@ class DecomposeMixin:
                     logger.info(f"任务拆解成功，生成 {len(result['subtasks'])} 个子任务")
                     logger.info(f"拆解理由: {result.get('reasoning', 'N/A')}")
                     
-                    from utils.datetime_helper import calculate_relative_time
-                    from datetime import datetime
-                    now = datetime.now()
+                    from utils.datetime_helper import calculate_relative_time, now_local
+                    now = now_local()
                     
                     # 累加天数
                     accumulated_days = 0

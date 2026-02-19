@@ -15,9 +15,6 @@ class IntentMixin:
     
     async def analyze_text_for_todos(self, text: str, existing_todos: List[Dict] = None) -> Dict[str, Any]:
         """分析文本并提取待办事项信息"""
-        from datetime import datetime
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
         intent_analysis = await self._analyze_intent(text)
         
         if intent_analysis.get('action') in ['CREATE', 'LIST', 'SEARCH'] or intent_analysis.get('todo_id'):
@@ -44,7 +41,8 @@ class IntentMixin:
         from datetime import datetime
         from ai.function_tools import get_task_analysis_tools
         
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        from utils.datetime_helper import now_local
+        current_time = now_local().strftime("%Y-%m-%d %H:%M")
         
         tools = get_task_analysis_tools(current_time)
         
@@ -68,11 +66,10 @@ class IntentMixin:
                     
                     logger.info(f"AI推断理由: {result.get('reasoning', 'N/A')}")
                     
-                    from utils.datetime_helper import calculate_relative_time
+                    from utils.datetime_helper import calculate_relative_time, now_local
                     from ai.time_validator import validate_reminder_time
-                    from datetime import datetime
                     
-                    now = datetime.now()
+                    now = now_local()
                     current_time_str = now.strftime("%Y-%m-%d %H:%M")
                     
                     # AI校验
@@ -86,12 +83,12 @@ class IntentMixin:
                             reminder_in_minutes=result.get('reminder_in_minutes', 0),
                         )
                     
-                    if result.get('due_in_days') is not None:
-                        date_str, _ = calculate_relative_time(now, days=result['due_in_days'])
-                        result['due_date'] = date_str
-                        logger.info(f"时间计算: due_in_days={result['due_in_days']} -> {date_str}")
-                    
                     if result.get('action') not in ('UPDATE', 'DELETE', 'COMPLETE'):
+                        if result.get('due_in_days') is not None:
+                            date_str, _ = calculate_relative_time(now, days=result['due_in_days'])
+                            result['due_date'] = date_str
+                            logger.info(f"时间计算: due_in_days={result['due_in_days']} -> {date_str}")
+                        
                         if result.get('reminder_in_days') is not None or result.get('reminder_in_hours') is not None:
                             r_days = result.get('reminder_in_days', 0)
                             r_hours = result.get('reminder_in_hours')
@@ -170,10 +167,10 @@ class IntentMixin:
                     if v is not None:
                         final_result[k] = v
                 
-                from utils.datetime_helper import calculate_relative_time
+                from utils.datetime_helper import calculate_relative_time, now_local
                 from datetime import datetime, date
                 
-                now = datetime.now()
+                now = now_local()
                 current_time_str = now.strftime("%Y-%m-%d %H:%M")
                 
                 # AI校验

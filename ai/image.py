@@ -45,9 +45,8 @@ class ImageMixin:
     async def analyze_image_for_todos(self, image_data: bytes, image_format: str, existing_todos: List[Dict] = None, caption: Optional[str] = None) -> Dict[str, Any]:
         """分析图片并提取待办事项（两步法：Vision提取 + FC分析）"""
         import json
-        from datetime import datetime
-        
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        from utils.datetime_helper import now_local
+        current_time = now_local().strftime("%Y-%m-%d %H:%M")
         
         image_data = self._compress_image_if_needed(image_data, max_size=512*1024)
         
@@ -155,10 +154,9 @@ class ImageMixin:
                     
                     logger.info(f"图片分析完成: {result.get('image_description', 'N/A')}")
                     
-                    from utils.datetime_helper import calculate_relative_time
-                    from datetime import datetime
+                    from utils.datetime_helper import calculate_relative_time, now_local
                     
-                    now = datetime.now()
+                    now = now_local()
                     current_time_str = now.strftime("%Y-%m-%d %H:%M")
                     
                     # AI校验

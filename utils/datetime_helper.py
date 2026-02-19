@@ -124,6 +124,15 @@ def calculate_relative_time(
     return date_str, time_str
 
 
+def now_local() -> 'datetime':
+    """
+    返回当前本地时间（依据 Config.TIMEZONE）。
+    """
+    from config import Config
+    local_tz = pytz.timezone(Config.TIMEZONE)
+    return datetime.now(local_tz).replace(tzinfo=None)
+
+
 def to_local_date(utc_iso: str, timezone: str = None) -> 'date':
     """
     将 Microsoft Graph API 返回的 UTC ISO 字符串转换为本地日期。

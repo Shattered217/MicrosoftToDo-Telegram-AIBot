@@ -1,0 +1,15 @@
+[Unit]
+Description=mstodo ESP32 Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.openclaw/tools/mstodo
+EnvironmentFile=%h/.openclaw/state/mstodo/bridge.env
+ExecStart=/bin/bash -c '${BRIDGE_CMD}'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

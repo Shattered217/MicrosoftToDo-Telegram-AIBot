@@ -1,0 +1,134 @@
+"""
+Microsoft Todo 直接客户端
+使用 Microsoft Graph API 进行任务管理
+通过混入类组合各功能模块
+"""
+
+import json
+import asyncio
+import aiohttp
+import logging
+import time
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+import pytz
+from config import Config
+
+from todo.token_manager import TokenManagerMixin
+from todo.api import ApiMixin
+
+logger = logging.getLogger(__name__)
+
+_token_cache: Dict[str, Optional[str]] = {"access_token": None, "refresh_token": None}
+
+
+class MicrosoftTodoDirectClient(TokenManagerMixin, ApiMixin):
+    """
+    Microsoft Todo 直接客户端
+
+    通过多重继承组合所有功能：
+    - TokenManagerMixin: Token刷新管理
+    - ApiMixin: 基础API操作（任务列表、任务CRUD）
+    """
+
+    def __init__(self):
+        global _token_cache
+        self.access_token = _token_cache["access_token"] or Config.MS_TODO_ACCESS_TOKEN
+        self.refresh_token = (
+            _token_cache["refresh_token"] or Config.MS_TODO_REFRESH_TOKEN
+        )
+        self.base_url = "https://graph.microsoft.com/v1.0"
+        self.session = None
+        self.client_id = Config.MS_TODO_CLIENT_ID
+        self.client_secret = Config.MS_TODO_CLIENT_SECRET
+        self.tenant_id = Config.MS_TODO_TENANT_ID
+        self.expires_at = None
+        self.token_type = None
+        self.scope = None
+        self.local_tz = pytz.timezone(Config.TIMEZONE)
+        self.utc_tz = pytz.UTC
+
+    def _should_refresh_access_token(self, skew_seconds: int = 300) -> bool:
+        expires_at = self.expires_at
+        if not isinstance(expires_at, (int, float)):
+            return False
+        return time.time() >= (float(expires_at) - float(skew_seconds))
+
+    def _update_token_cache(self):
+        """更新全局 token 缓存"""
+        global _token_cache
+        _token_cache["access_token"] = self.access_token
+        _token_cache["refresh_token"] = self.refresh_token
+
+    async def _ensure_session(self):
+        """确保HTTP会话存在且绑定到当前 event loop"""
+        try:
+            current_loop = asyncio.get_running_loop()
+            if self.session is None or self.session.closed:
+                self.session = aiohttp.ClientSession()
+        except RuntimeError:
+            if self.session is None:
+                self.session = aiohttp.ClientSession()
+
+    async def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict[str, Any]] = None,
+        retry_on_401: bool = True,
+    ) -> Dict[str, Any]:
+        """发送HTTP请求到Microsoft Graph API"""
+        start = time.perf_counter()
+        await self._ensure_session()
+
+        if self.refresh_token and self._should_refresh_access_token():
+            refresh_start = time.perf_counter()
+            if await self._refresh_access_token():
+                refresh_ms = int((time.perf_counter() - refresh_start) * 1000)
+                logger.info("Preflight token refresh took %dms", refresh_ms)
+
+        url = f"{self.base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with self.session.request(
+                method, url, headers=headers, json=data
+            ) as response:
+                if response.status == 401 and retry_on_401:
+                    logger.warning("访问令牌已过期，尝试刷新...")
+                    refresh_start = time.perf_counter()
+                    if await self._refresh_access_token():
+                        refresh_ms = int((time.perf_counter() - refresh_start) * 1000)
+                        logger.info("Token refresh took %dms", refresh_ms)
+                        return await self._make_request(
+                            method, endpoint, data, retry_on_401=False
+                        )
+                    else:
+                        return {"error": "访问令牌无效且刷新失败"}
+
+                response_text = await response.text()
+
+                if response.status >= 400:
+                    logger.error(f"API请求失败: {response.status} - {response_text}")
+                    return {
+                        "error": f"API请求失败: {response.status} - {response_text}"
+                    }
+
+                total_ms = int((time.perf_counter() - start) * 1000)
+                logger.info("Graph %s %s completed in %dms", method, endpoint, total_ms)
+                if response_text:
+                    return json.loads(response_text)
+                else:
+                    return {"success": True}
+
+        except Exception as e:
+            logger.error(f"请求异常: {e}")
+            return {"error": str(e)}
+
+    async def close(self):
+        """关闭HTTP会话"""
+        if self.session:
+            await self.session.close()

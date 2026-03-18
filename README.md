@@ -125,7 +125,7 @@ Microsoft To Do 的 due 往往更像"截止日期"而不是精确到分钟的时
 
 ## ESP32（可选）
 
-本仓库的 `esp32-bridge` 分支提供一个"设备桥接服务"（Bridge），用于把待办同步到 ESP32：
+本仓库在 `claw-next-esp32` 分支提供"设备桥接服务"（Bridge），用于把待办同步到 ESP32：
 
 - **HTTP 模式（推荐同局域网）**：ESP32 主动拉取 `GET /api/snapshot`，点按后 `POST /api/cmd`
 - **MQTT 模式（推荐异地/WAN）**：ESP32 订阅 tasks + 发布 cmd；Bridge 负责执行并回 ack
@@ -133,7 +133,7 @@ Microsoft To Do 的 due 往往更像"截止日期"而不是精确到分钟的时
 切换分支即可启用：
 
 ```bash
-git checkout esp32-bridge
+git checkout claw-next-esp32
 ```
 
 ---

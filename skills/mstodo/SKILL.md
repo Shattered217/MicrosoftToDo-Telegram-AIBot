@@ -1,7 +1,7 @@
 ---
 name: mstodo
 description: Microsoft To Do management via CLI — create, query, complete, delete tasks in chat
-metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_CLIENT_ID"]}}}
+metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_CLIENT_ID"]},"baseDir":"~/.openclaw/tools/mstodo"}}
 ---
 
 # mstodo (OpenClaw Skill)
@@ -9,9 +9,10 @@ metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_C
 ## What this skill does
 
 - Provides a safe, chat-first UX for Microsoft To Do.
-- All operations go through a local CLI script:
-  `uv run {baseDir}/scripts/run.py <command> [options]`
+- All operations go through a local CLI script located at `~/.openclaw/tools/mstodo/scripts/run.py`
+- Command format: `uv run ~/.openclaw/tools/mstodo/scripts/run.py <command> [options]`
 - Output is always JSON to stdout; logs go to stderr.
+- **Important**: The full project (including scripts/) must be deployed to `~/.openclaw/tools/mstodo` via `install-mstodo.sh`
 
 ## Security / safety rules (must follow)
 
@@ -28,16 +29,23 @@ metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_C
 
 ### 1) Install dependencies
 
+Run the installation script to deploy the full project:
+
 ```bash
-uv sync --project {baseDir}
+./scripts/install-mstodo.sh
 ```
+
+This will:
+- Deploy project to `~/.openclaw/tools/mstodo`
+- Install dependencies via `uv sync`
+- Copy skill to `~/.openclaw/workspace/skills/mstodo`
 
 ### 2) Authentication (interactive OAuth)
 
 Step 1 — begin auth:
 
 ```bash
-uv run {baseDir}/scripts/run.py auth_begin
+uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_begin
 ```
 
 Returns JSON with `auth_url`. Tell the user to open that URL in a browser, sign in with their Microsoft account, and paste the full redirected URL back.
@@ -45,7 +53,7 @@ Returns JSON with `auth_url`. Tell the user to open that URL in a browser, sign 
 Step 2 — finish auth (user pastes redirected URL):
 
 ```bash
-uv run {baseDir}/scripts/run.py auth_finish --redirect '<PASTED_URL>'
+uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_finish --redirect '<PASTED_URL>'
 ```
 
 Tokens are saved locally: `~/.openclaw/state/mstodo/tokens.json`
@@ -53,29 +61,31 @@ Tokens are saved locally: `~/.openclaw/state/mstodo/tokens.json`
 ### 3) Verify
 
 ```bash
-uv run {baseDir}/scripts/run.py auth_status
+uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_status
 ```
 
 Should show `has_refresh_token: true`.
 
 ## Available commands
 
+All commands use the full path: `uv run ~/.openclaw/tools/mstodo/scripts/run.py <command> [options]`
+
 ### Check auth status
 
 ```bash
-uv run {baseDir}/scripts/run.py auth_status
+uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_status
 ```
 
 ### List all task lists
 
 ```bash
-uv run {baseDir}/scripts/run.py lists
+uv run ~/.openclaw/tools/mstodo/scripts/run.py lists
 ```
 
 ### List tasks
 
 ```bash
-uv run {baseDir}/scripts/run.py tasks --status active --limit 50
+uv run ~/.openclaw/tools/mstodo/scripts/run.py tasks --status active --limit 50
 ```
 
 Options: `--list-id <ID>`, `--status active|completed|all`, `--due-before <ISO_DATE>`, `--limit <N>`
@@ -83,7 +93,7 @@ Options: `--list-id <ID>`, `--status active|completed|all`, `--due-before <ISO_D
 ### Search tasks by title
 
 ```bash
-uv run {baseDir}/scripts/run.py search --query "meeting"
+uv run ~/.openclaw/tools/mstodo/scripts/run.py search --query "meeting"
 ```
 
 Options: `--list-id <ID>`, `--limit <N>`, `--status active|completed|all`
@@ -91,7 +101,7 @@ Options: `--list-id <ID>`, `--limit <N>`, `--status active|completed|all`
 ### Create a task
 
 ```bash
-uv run {baseDir}/scripts/run.py create --title "Buy groceries" --due "2025-03-20" --reminder "2025-03-20T09:00:00" --note "Milk, eggs, bread"
+uv run ~/.openclaw/tools/mstodo/scripts/run.py create --title "Buy groceries" --due "2025-03-20" --reminder "2025-03-20T09:00:00" --note "Milk, eggs, bread"
 ```
 
 Options: `--list-id <ID>`, `--due <ISO_DATE>`, `--reminder <ISO_DATETIME>`, `--note <TEXT>`
@@ -99,13 +109,13 @@ Options: `--list-id <ID>`, `--due <ISO_DATE>`, `--reminder <ISO_DATETIME>`, `--n
 ### Update a task
 
 ```bash
-uv run {baseDir}/scripts/run.py update --task-id <ID> --title "New title" --due "2025-03-25"
+uv run ~/.openclaw/tools/mstodo/scripts/run.py update --task-id <ID> --title "New title" --due "2025-03-25"
 ```
 
 You can also resolve by title query:
 
 ```bash
-uv run {baseDir}/scripts/run.py update --query "meeting" --title "New title"
+uv run ~/.openclaw/tools/mstodo/scripts/run.py update --query "meeting" --title "New title"
 ```
 
 Options: `--task-id <ID>`, `--query <TEXT>`, `--list-id <ID>`, `--title`, `--due`, `--reminder`, `--note`, `--status`
@@ -115,13 +125,13 @@ Note: `--task-id` and `--query` are mutually exclusive.
 ### Complete a task
 
 ```bash
-uv run {baseDir}/scripts/run.py complete --task-id <ID>
+uv run ~/.openclaw/tools/mstodo/scripts/run.py complete --task-id <ID>
 ```
 
 You can also resolve by title query:
 
 ```bash
-uv run {baseDir}/scripts/run.py complete --query "meeting"
+uv run ~/.openclaw/tools/mstodo/scripts/run.py complete --query "meeting"
 ```
 
 Options: `--task-id <ID>`, `--query <TEXT>`, `--list-id <ID>`
@@ -131,13 +141,13 @@ Note: `--task-id` and `--query` are mutually exclusive.
 ### Delete a task
 
 ```bash
-uv run {baseDir}/scripts/run.py delete --task-id <ID>
+uv run ~/.openclaw/tools/mstodo/scripts/run.py delete --task-id <ID>
 ```
 
 You can also resolve by title query:
 
 ```bash
-uv run {baseDir}/scripts/run.py delete --query "meeting"
+uv run ~/.openclaw/tools/mstodo/scripts/run.py delete --query "meeting"
 ```
 
 Options: `--task-id <ID>`, `--query <TEXT>`, `--list-id <ID>`
@@ -147,7 +157,7 @@ Note: `--task-id` and `--query` are mutually exclusive.
 ### Complex heartbeat todo (fun mode)
 
 ```bash
-uv run {baseDir}/scripts/run.py complex_todo --goal "Ship a resilient sync pipeline" --beats 6
+uv run ~/.openclaw/tools/mstodo/scripts/run.py complex_todo --goal "Ship a resilient sync pipeline" --beats 6
 ```
 
 Returns a structured plan with:

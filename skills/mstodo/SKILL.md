@@ -25,6 +25,29 @@ metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_C
 4. **Never echo tokens**
    - Do not print access_token / refresh_token in chat logs.
 
+## Handling image inputs
+
+When user sends an image with TODO request (e.g., "TODO 明天吃" with food photo):
+
+1. **Extract task details from image context**:
+   - Analyze image content to understand what the TODO is about
+   - Example: Food photo → task title should describe the food item
+   - Example: Screenshot → extract relevant text or context
+
+2. **Combine image analysis with user text**:
+   - User text provides timing/priority ("明天", "下周")
+   - Image provides the subject matter (what to do)
+   - Create descriptive task title combining both
+
+3. **Handle ambiguity**:
+   - If image content is unclear, ask user for clarification
+   - Example: "I see a food photo. Should the task be '买[food name]' or '吃[food name]'?"
+
+4. **Time extraction**:
+   - Parse relative time from user text ("明天" = tomorrow, "下周" = next week)
+   - Default time: 18:00 for meal-related tasks, 09:00 for others
+   - Always confirm extracted time with user if not explicitly stated
+
 ## First-time setup
 
 ### 1) Install dependencies
@@ -40,12 +63,35 @@ This will:
 - Install dependencies via `uv sync`
 - Copy skill to `~/.openclaw/workspace/skills/mstodo`
 
-### 2) Authentication (interactive OAuth)
+### 2) Configure environment variables
+
+**CRITICAL**: Set these in `~/.openclaw/openclaw.json` under `env`:
+
+```json
+{
+  "env": {
+    "MS_TODO_CLIENT_ID": "your-azure-app-client-id",
+    "TIMEZONE": "Asia/Shanghai"
+  }
+}
+```
+
+**TIMEZONE is essential**:
+- All task times are converted from local timezone to UTC
+- Wrong timezone = wrong task times (e.g., 18:00 becomes 10:00)
+- Common values: `Asia/Shanghai`, `America/New_York`, `Europe/London`
+- Default if not set: `Asia/Shanghai`
+
+### 3) Authentication (interactive OAuth)
 
 Step 1 — begin auth:
 
 ```bash
+# Using uv (if available)
 uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_begin
+
+# OR using venv python directly
+~/.openclaw/tools/mstodo/.venv/bin/python ~/.openclaw/tools/mstodo/scripts/run.py auth_begin
 ```
 
 Returns JSON with `auth_url`. Tell the user to open that URL in a browser, sign in with their Microsoft account, and paste the full redirected URL back.
@@ -53,18 +99,28 @@ Returns JSON with `auth_url`. Tell the user to open that URL in a browser, sign 
 Step 2 — finish auth (user pastes redirected URL):
 
 ```bash
+# Using uv (if available)
 uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_finish --redirect '<PASTED_URL>'
+
+# OR using venv python directly
+~/.openclaw/tools/mstodo/.venv/bin/python ~/.openclaw/tools/mstodo/scripts/run.py auth_finish --redirect '<PASTED_URL>'
 ```
 
 Tokens are saved locally: `~/.openclaw/state/mstodo/tokens.json`
 
-### 3) Verify
+### 4) Verify
 
 ```bash
+# Using uv (if available)
 uv run ~/.openclaw/tools/mstodo/scripts/run.py auth_status
+
+# OR using venv python directly
+~/.openclaw/tools/mstodo/.venv/bin/python ~/.openclaw/tools/mstodo/scripts/run.py auth_status
 ```
 
 Should show `has_refresh_token: true`.
+
+**Note**: OpenClaw may use either execution method depending on environment. Both work identically.
 
 ## Available commands
 

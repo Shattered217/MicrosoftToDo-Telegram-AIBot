@@ -66,11 +66,23 @@ echo "  Done."
 
 # 2. Install dependencies
 echo "[2/3] Installing Python dependencies ..."
+
+# Find uv in common locations
+UV_BIN=""
 if command -v uv &>/dev/null; then
-    uv sync --project "$PROJECT_DIR"
+    UV_BIN="uv"
+elif [[ -x "${HOME}/.local/bin/uv" ]]; then
+    UV_BIN="${HOME}/.local/bin/uv"
+elif [[ -x "${HOME}/.cargo/bin/uv" ]]; then
+    UV_BIN="${HOME}/.cargo/bin/uv"
+fi
+
+if [[ -n "$UV_BIN" ]]; then
+    "$UV_BIN" sync --project "$PROJECT_DIR"
     echo "  Done."
 else
-    echo "  WARNING: uv not found. Install uv first: https://docs.astral.sh/uv/" >&2
+    echo "  WARNING: uv not found in PATH, ~/.local/bin, or ~/.cargo/bin" >&2
+    echo "  Install uv first: https://docs.astral.sh/uv/" >&2
     echo "  Skipping dependency install." >&2
 fi
 

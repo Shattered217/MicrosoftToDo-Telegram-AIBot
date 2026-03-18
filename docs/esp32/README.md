@@ -43,7 +43,7 @@ ESP32 订阅任务 + 发布命令：
 
 ```bash
 # HTTP 模式（推荐同局域网）
-./scripts/install-bridge.sh --mode http --port 7070 --start
+./scripts/install-bridge.sh --mode http --port 7070
 
 # MQTT 模式（推荐异地/WAN）
 ./scripts/install-bridge.sh --mode mqtt \
@@ -51,17 +51,12 @@ ESP32 订阅任务 + 发布命令：
     --mqtt-port 1883 \
     --mqtt-username <user> \
     --mqtt-password <pass> \
-    --device-id esp32-1 \
-    --start
+    --device-id esp32-1
 
 # 两者同时（同时提供 HTTP 和 MQTT）
 ./scripts/install-bridge.sh --mode both \
     --port 7070 \
-    --mqtt-broker <VPS_IP> \
-    --start
-
-# 安装后启动
-systemctl --user start mstodo-bridge
+    --mqtt-broker <VPS_IP>
 ```
 
 **脚本会自动完成：**
@@ -69,19 +64,42 @@ systemctl --user start mstodo-bridge
 - ✅ 安装 Python 依赖（`uv sync`）
 - ✅ 生成配置文件（`bridge.env`）
 - ✅ 安装并启用 systemd 服务
-- ✅ 可选：立即启动服务（`--start`）
+- ✅ **默认自动启动服务**（不需要 `--start` 参数）
+
+**服务管理命令：**
+```bash
+# 查看状态
+systemctl --user status mstodo-bridge
+
+# 重启服务
+systemctl --user restart mstodo-bridge
+
+# 停止服务
+systemctl --user stop mstodo-bridge
+
+# 查看日志
+journalctl --user -u mstodo-bridge -f
+```
 
 ### 手动运行（调试）
 
-```bash
-# HTTP
-uv run python -m bridge.mstodo_bridge.daemon http --host 0.0.0.0 --port 7070
+如需手动运行（不通过 systemd），使用 venv python：
 
-# MQTT
-uv run python -m bridge.mstodo_bridge.daemon mqtt \
+```bash
+# 进入项目目录
+cd ~/.openclaw/tools/mstodo
+
+# HTTP 模式
+.venv/bin/python -m bridge.mstodo_bridge.daemon http --host 0.0.0.0 --port 7070
+
+# MQTT 模式
+.venv/bin/python -m bridge.mstodo_bridge.daemon mqtt \
     --mqtt-broker <IP> --mqtt-port 1883 \
     --mqtt-username <user> --mqtt-password <pass> \
     --device-id esp32-1 --publish-interval 60 --limit 6
+
+# 或使用 uv（如果在开发环境）
+uv run python -m bridge.mstodo_bridge.daemon http --host 0.0.0.0 --port 7070
 ```
 
 ## HTTP API 详情

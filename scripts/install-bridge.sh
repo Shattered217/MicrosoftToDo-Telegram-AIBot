@@ -33,7 +33,7 @@ MQTT_PORT="1883"
 MQTT_USERNAME=""
 MQTT_PASSWORD=""
 DEVICE_ID="esp32-1"
-DO_START=false
+DO_START=true  # default: start after install
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -69,8 +69,14 @@ echo "  Done."
 echo "[2/4] Installing dependencies ..."
 if command -v uv &>/dev/null; then
     uv sync --project "$TOOLS_DIR"
+    PYTHON_BIN="${TOOLS_DIR}/.venv/bin/python"
+    if [[ ! -x "$PYTHON_BIN" ]]; then
+        echo "  WARNING: venv python not found at ${PYTHON_BIN}, falling back to uv run" >&2
+        PYTHON_BIN="uv run python"
+    fi
 else
-    echo "  WARNING: uv not found." >&2
+    echo "  WARNING: uv not found, using system python (may fail)" >&2
+    PYTHON_BIN="python3"
 fi
 echo "  Done."
 
@@ -80,14 +86,14 @@ mkdir -p "$STATE_DIR"
 
 case "$MODE" in
     http)
-        CMD="uv run python -m bridge.mstodo_bridge.daemon http --host ${HOST} --port ${PORT}"
+        CMD="${PYTHON_BIN} -m bridge.mstodo_bridge.daemon http --host ${HOST} --port ${PORT}"
         ;;
     mqtt)
         if [[ -z "$MQTT_BROKER" ]]; then
             echo "ERROR: --mqtt-broker is required for mqtt mode" >&2
             exit 1
         fi
-        CMD="uv run python -m bridge.mstodo_bridge.daemon mqtt --mqtt-broker ${MQTT_BROKER} --mqtt-port ${MQTT_PORT} --device-id ${DEVICE_ID}"
+        CMD="${PYTHON_BIN} -m bridge.mstodo_bridge.daemon mqtt --mqtt-broker ${MQTT_BROKER} --mqtt-port ${MQTT_PORT} --device-id ${DEVICE_ID}"
         [[ -n "$MQTT_USERNAME" ]] && CMD+=" --mqtt-username ${MQTT_USERNAME}"
         [[ -n "$MQTT_PASSWORD" ]] && CMD+=" --mqtt-password ${MQTT_PASSWORD}"
         ;;
@@ -96,7 +102,7 @@ case "$MODE" in
             echo "ERROR: --mqtt-broker is required for both mode" >&2
             exit 1
         fi
-        CMD="uv run python -m bridge.mstodo_bridge.daemon both --host ${HOST} --port ${PORT} --mqtt-broker ${MQTT_BROKER} --mqtt-port ${MQTT_PORT} --device-id ${DEVICE_ID}"
+        CMD="${PYTHON_BIN} -m bridge.mstodo_bridge.daemon both --host ${HOST} --port ${PORT} --mqtt-broker ${MQTT_BROKER} --mqtt-port ${MQTT_PORT} --device-id ${DEVICE_ID}"
         [[ -n "$MQTT_USERNAME" ]] && CMD+=" --mqtt-username ${MQTT_USERNAME}"
         [[ -n "$MQTT_PASSWORD" ]] && CMD+=" --mqtt-password ${MQTT_PASSWORD}"
         ;;

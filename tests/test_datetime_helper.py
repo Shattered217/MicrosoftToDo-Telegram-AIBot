@@ -8,7 +8,14 @@ class TestDatetimeHelper(unittest.TestCase):
         from utils.datetime_helper import to_utc_iso
 
         out = to_utc_iso("2026-03-18", "09:05", "Asia/Shanghai")
-        self.assertEqual(out, "2026-03-18T09:05:00")
+        self.assertEqual(out, "2026-03-18T01:05:00+00:00")
+
+    def test_to_utc_iso_converts_timezone_correctly(self) -> None:
+        """Verify Asia/Shanghai 18:00 converts to UTC 10:00 (8 hour difference)"""
+        from utils.datetime_helper import to_utc_iso
+
+        out = to_utc_iso("2026-03-18", "18:00", "Asia/Shanghai")
+        self.assertEqual(out, "2026-03-18T10:00:00+00:00")
 
     def test_to_utc_iso_invalid_time_raises(self) -> None:
         from utils.datetime_helper import to_utc_iso

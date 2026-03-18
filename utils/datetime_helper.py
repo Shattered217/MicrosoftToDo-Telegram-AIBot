@@ -37,9 +37,10 @@ def to_utc_iso(date_str: str, time_str: str, tz_name: str) -> str:
         raise ValueError("date_str is required")
     year, month, day = (int(x) for x in d.split("-"))
     hh, mm, ss = _parse_time(time_str)
-    _safe_zoneinfo(tz_name)
-    local = datetime(year, month, day, hh, mm, ss)
-    return local.replace(microsecond=0).isoformat(timespec="seconds")
+    tz = _safe_zoneinfo(tz_name)
+    local = datetime(year, month, day, hh, mm, ss, tzinfo=tz)
+    utc = local.astimezone(ZoneInfo("UTC"))
+    return utc.replace(microsecond=0).isoformat(timespec="seconds")
 
 
 def calculate_relative_time(target_iso: str, *, now: Optional[datetime] = None) -> str:

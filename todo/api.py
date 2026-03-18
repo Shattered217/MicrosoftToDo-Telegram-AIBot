@@ -48,6 +48,11 @@ class ApiMixin:
 
         return await self._make_request("GET", endpoint)
 
+    async def get_task(self, list_id: str, task_id: str) -> Dict[str, Any]:
+        return await self._make_request(
+            "GET", f"/me/todo/lists/{list_id}/tasks/{task_id}"
+        )
+
     async def create_task(
         self,
         list_id: str,

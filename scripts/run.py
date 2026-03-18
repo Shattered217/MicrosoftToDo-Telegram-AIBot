@@ -12,9 +12,10 @@ Commands:
   tasks        [options]       List tasks
   search       --query TEXT    Search tasks by title
   create       --title TEXT    Create a task
-  update       --task-id ID    Update a task
-  complete     --task-id ID    Complete a task
-  delete       --task-id ID    Delete a task
+  update       --task-id/--query Update a task
+  complete     --task-id/--query Complete a task
+  delete       --task-id/--query Delete a task
+  complex_todo --goal TEXT     Build heartbeat-driven plan
 
 All output is JSON to stdout. Logs go to stderr.
 Exit code 0 = success, 1 = error.
@@ -28,6 +29,7 @@ import json
 import logging
 import os
 import sys
+from typing import Any
 
 # Ensure project root is on sys.path so core/todo/config imports work.
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -66,9 +68,32 @@ def _ok(data: dict) -> None:
     _out({"success": True, "data": data})
 
 
-def _err(msg: str) -> None:
-    _out({"success": False, "error": msg})
+def _err(msg: str, *, code: str = "cli_error") -> None:
+    _out({"success": False, "error": msg, "error_code": code})
     sys.exit(1)
+
+
+def _err_with_data(msg: str, *, code: str, data: dict) -> None:
+    _out({"success": False, "error": msg, "error_code": code, "data": data})
+    sys.exit(1)
+
+
+def _require_nonempty(value: str | None, *, name: str) -> str:
+    v = (value or "").strip()
+    if not v:
+        _err(f"{name} is required", code="invalid_argument")
+    return v
+
+
+def _require_positive(value: Any, *, name: str) -> int:
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        _err(f"{name} must be an integer > 0", code="invalid_argument")
+        return 1
+    if v <= 0:
+        _err(f"{name} must be > 0", code="invalid_argument")
+    return v
 
 
 async def _with_core(fn):
@@ -78,6 +103,110 @@ async def _with_core(fn):
         return await fn(core)
     finally:
         await core.close()
+
+
+async def _resolve_task_id_by_query(
+    core: MSTodoCore,
+    *,
+    query: str,
+    list_id: str | None,
+    status: str,
+) -> tuple[str | None, list[dict]]:
+    q = _require_nonempty(query, name="--query")
+    hits = await core.search_tasks(query=q, list_id=list_id, limit=10, status=status)
+    candidates = [
+        {
+            "task_id": h.task_id,
+            "list_id": h.list_id,
+            "title": h.title,
+            "status": h.status,
+            "due": h.due,
+            "score": h.score,
+        }
+        for h in hits
+    ]
+    if len(candidates) == 1:
+        return candidates[0]["task_id"], candidates
+    return None, candidates
+
+
+def _heartbeat_phases() -> list[str]:
+    return ["scan", "shape", "build", "verify", "ship"]
+
+
+def _build_complex_todo(goal: str, beats: int) -> dict:
+    phases = _heartbeat_phases()
+    beat_count = max(3, min(12, int(beats)))
+    words = [w for w in goal.replace("\n", " ").split(" ") if w.strip()]
+    complexity = max(1, min(10, len(words) // 3 + 1))
+
+    heartbeats = []
+    for i in range(beat_count):
+        progress = int(round(((i + 1) / beat_count) * 100))
+        phase = phases[min(len(phases) - 1, (i * len(phases)) // beat_count)]
+        pulse = "💓" if i % 2 == 0 else "💗"
+        heartbeats.append(
+            {
+                "beat": i + 1,
+                "phase": phase,
+                "progress": progress,
+                "pulse": pulse,
+                "message": f"{pulse} {phase} {progress}%",
+            }
+        )
+
+    where = "task execution"
+    how = "Split work into milestones and verify each phase"
+    why = f"deliver goal: {goal}"
+
+    todos = [
+        {
+            "id": "T1",
+            "title": f"[{where}] Gather constraints to {why} — expect clear success criteria",
+            "phase": "scan",
+            "risk": "scope drift",
+        },
+        {
+            "id": "T2",
+            "title": f"[{where}] Define milestones to {why} — expect ordered implementation plan",
+            "phase": "shape",
+            "risk": "missing dependency",
+        },
+        {
+            "id": "T3",
+            "title": f"[{where}] Execute core changes to {why} — expect feature-complete behavior",
+            "phase": "build",
+            "risk": "edge-case bug",
+        },
+        {
+            "id": "T4",
+            "title": f"[{where}] Run diagnostics/tests to {why} — expect green verification",
+            "phase": "verify",
+            "risk": "flaky checks",
+        },
+        {
+            "id": "T5",
+            "title": f"[{where}] Package and summarize to {why} — expect handoff-ready output",
+            "phase": "ship",
+            "risk": "unclear rollout",
+        },
+    ]
+
+    return {
+        "schema_version": 1,
+        "goal": goal,
+        "beats_requested": int(beats),
+        "beats_applied": beat_count,
+        "complexity": complexity,
+        "heartbeat_mode": "openclaw-compatible",
+        "heartbeats": heartbeats,
+        "todos": todos,
+        "next_action": {
+            "type": "start_phase",
+            "phase": "scan",
+            "hint": how,
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +230,7 @@ def cmd_auth_status(_args: argparse.Namespace) -> None:
 def cmd_auth_begin(args: argparse.Namespace) -> None:
     client_id = os.getenv("MS_TODO_CLIENT_ID") or ""
     if not client_id:
-        _err("MS_TODO_CLIENT_ID is required in environment")
+        _err("MS_TODO_CLIENT_ID is required in environment", code="missing_env")
 
     tenant_id = args.tenant_id or os.getenv("MS_TODO_TENANT_ID") or "consumers"
     redirect_uri = (
@@ -128,17 +257,20 @@ def cmd_auth_begin(args: argparse.Namespace) -> None:
 def cmd_auth_finish(args: argparse.Namespace) -> None:
     redirect = args.redirect
     if not redirect:
-        _err("--redirect is required (paste the full redirected URL or the code)")
+        _err(
+            "--redirect is required (paste the full redirected URL or the code)",
+            code="invalid_argument",
+        )
 
     code, state, _params = parse_code_from_redirect(redirect)
-    if not code:
-        _err(
-            "Could not parse code from redirect. Paste the full redirected URL or the code value."
-        )
+    code = _require_nonempty(
+        code,
+        name="code (from redirect)",
+    )
 
     client_id = os.getenv("MS_TODO_CLIENT_ID") or ""
     if not client_id:
-        _err("MS_TODO_CLIENT_ID is required in environment")
+        _err("MS_TODO_CLIENT_ID is required in environment", code="missing_env")
 
     tenant_id = os.getenv("MS_TODO_TENANT_ID") or "consumers"
     client_secret = os.getenv("MS_TODO_CLIENT_SECRET")
@@ -155,7 +287,10 @@ def cmd_auth_finish(args: argparse.Namespace) -> None:
     )
 
     if isinstance(tokens, dict) and tokens.get("error"):
-        _err(tokens.get("error_description") or tokens.get("error"))
+        msg = tokens.get("error_description") or tokens.get("error")
+        if not isinstance(msg, str) or not msg:
+            msg = "OAuth token exchange failed"
+        _err(msg, code="oauth_exchange_failed")
 
     import time
 
@@ -168,7 +303,10 @@ def cmd_auth_finish(args: argparse.Namespace) -> None:
         scope=tokens.get("scope"),
     )
     if not bundle.refresh_token:
-        _err("No refresh_token returned. Ensure offline_access scope is granted.")
+        _err(
+            "No refresh_token returned. Ensure offline_access scope is granted.",
+            code="oauth_missing_refresh_token",
+        )
 
     store = TokenStore()
     store.save(bundle)
@@ -199,6 +337,7 @@ def cmd_tasks(args: argparse.Namespace) -> None:
             limit=args.limit,
         )
 
+    args.limit = _require_positive(args.limit, name="--limit")
     tasks = asyncio.run(_with_core(_run))
     _ok({"tasks": tasks})
 
@@ -223,6 +362,8 @@ def cmd_search(args: argparse.Namespace) -> None:
             for h in hits
         ]
 
+    args.query = _require_nonempty(args.query, name="--query")
+    args.limit = _require_positive(args.limit, name="--limit")
     candidates = asyncio.run(_with_core(_run))
     _ok({"candidates": candidates})
 
@@ -237,6 +378,7 @@ def cmd_create(args: argparse.Namespace) -> None:
             note=args.note,
         )
 
+    args.title = _require_nonempty(args.title, name="--title")
     result = asyncio.run(_with_core(_run))
     _ok(result)
 
@@ -254,9 +396,40 @@ def cmd_update(args: argparse.Namespace) -> None:
     if args.status:
         patch["status"] = args.status
 
+    if not patch:
+        _err(
+            "No fields to update. Provide at least one of: --title, --due, --reminder, --note, --status",
+            code="invalid_argument",
+        )
+
+    if args.task_id and args.query:
+        _err("Use only one of --task-id or --query", code="invalid_argument")
+
     async def _run(core: MSTodoCore):
+        task_id = args.task_id
+        if not task_id and args.query:
+            resolved, candidates = await _resolve_task_id_by_query(
+                core,
+                query=args.query,
+                list_id=args.list_id,
+                status="all",
+            )
+            if not resolved:
+                if not candidates:
+                    _err_with_data(
+                        "No task found for the given query",
+                        code="task_not_found",
+                        data={"query": args.query, "candidates": []},
+                    )
+                _err_with_data(
+                    "Multiple task candidates found; please disambiguate",
+                    code="ambiguous_task",
+                    data={"query": args.query, "candidates": candidates},
+                )
+            task_id = resolved
+        task_id = _require_nonempty(task_id, name="--task-id or --query")
         return await core.update_task(
-            task_id=args.task_id,
+            task_id=task_id,
             patch=patch,
             list_id=args.list_id,
         )
@@ -266,9 +439,34 @@ def cmd_update(args: argparse.Namespace) -> None:
 
 
 def cmd_complete(args: argparse.Namespace) -> None:
+    if args.task_id and args.query:
+        _err("Use only one of --task-id or --query", code="invalid_argument")
+
     async def _run(core: MSTodoCore):
+        task_id = args.task_id
+        if not task_id and args.query:
+            resolved, candidates = await _resolve_task_id_by_query(
+                core,
+                query=args.query,
+                list_id=args.list_id,
+                status="active",
+            )
+            if not resolved:
+                if not candidates:
+                    _err_with_data(
+                        "No task found for the given query",
+                        code="task_not_found",
+                        data={"query": args.query, "candidates": []},
+                    )
+                _err_with_data(
+                    "Multiple task candidates found; please disambiguate",
+                    code="ambiguous_task",
+                    data={"query": args.query, "candidates": candidates},
+                )
+            task_id = resolved
+        task_id = _require_nonempty(task_id, name="--task-id or --query")
         return await core.complete_task(
-            task_id=args.task_id,
+            task_id=task_id,
             list_id=args.list_id,
         )
 
@@ -277,14 +475,45 @@ def cmd_complete(args: argparse.Namespace) -> None:
 
 
 def cmd_delete(args: argparse.Namespace) -> None:
+    if args.task_id and args.query:
+        _err("Use only one of --task-id or --query", code="invalid_argument")
+
     async def _run(core: MSTodoCore):
+        task_id = args.task_id
+        if not task_id and args.query:
+            resolved, candidates = await _resolve_task_id_by_query(
+                core,
+                query=args.query,
+                list_id=args.list_id,
+                status="all",
+            )
+            if not resolved:
+                if not candidates:
+                    _err_with_data(
+                        "No task found for the given query",
+                        code="task_not_found",
+                        data={"query": args.query, "candidates": []},
+                    )
+                _err_with_data(
+                    "Multiple task candidates found; please disambiguate",
+                    code="ambiguous_task",
+                    data={"query": args.query, "candidates": candidates},
+                )
+            task_id = resolved
+        task_id = _require_nonempty(task_id, name="--task-id or --query")
         return await core.delete_task(
-            task_id=args.task_id,
+            task_id=task_id,
             list_id=args.list_id,
         )
 
     result = asyncio.run(_with_core(_run))
     _ok(result)
+
+
+def cmd_complex_todo(args: argparse.Namespace) -> None:
+    goal = _require_nonempty(args.goal, name="--goal")
+    beats = _require_positive(args.beats, name="--beats")
+    _ok(_build_complex_todo(goal, beats))
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +564,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     # update
     p = sub.add_parser("update", help="Update a task")
-    p.add_argument("--task-id", required=True)
+    p.add_argument("--task-id", default=None)
+    p.add_argument("--query", default=None)
     p.add_argument("--list-id", default=None)
     p.add_argument("--title", default=None)
     p.add_argument("--due", default=None)
@@ -345,13 +575,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     # complete
     p = sub.add_parser("complete", help="Complete a task")
-    p.add_argument("--task-id", required=True)
+    p.add_argument("--task-id", default=None)
+    p.add_argument("--query", default=None)
     p.add_argument("--list-id", default=None)
 
     # delete
     p = sub.add_parser("delete", help="Delete a task")
-    p.add_argument("--task-id", required=True)
+    p.add_argument("--task-id", default=None)
+    p.add_argument("--query", default=None)
     p.add_argument("--list-id", default=None)
+
+    p = sub.add_parser(
+        "complex_todo",
+        help="Build heartbeat-driven complex task plan",
+    )
+    p.add_argument("--goal", required=True)
+    p.add_argument("--beats", type=int, default=5)
 
     return ap
 
@@ -367,6 +606,7 @@ DISPATCH = {
     "update": cmd_update,
     "complete": cmd_complete,
     "delete": cmd_delete,
+    "complex_todo": cmd_complex_todo,
 }
 
 
@@ -375,15 +615,16 @@ def main() -> None:
     args = parser.parse_args()
 
     handler = DISPATCH.get(args.command)
-    if not handler:
-        _err(f"Unknown command: {args.command}")
+    if handler is None:
+        _err(f"Unknown command: {args.command}", code="unknown_command")
+        return
 
     try:
         handler(args)
     except SystemExit:
         raise
     except Exception as e:
-        _err(str(e))
+        _err(str(e), code="runtime_error")
 
 
 if __name__ == "__main__":

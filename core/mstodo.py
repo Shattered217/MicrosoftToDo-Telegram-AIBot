@@ -14,8 +14,8 @@ from the repo. Later we can further decouple Config/env parsing.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import difflib
@@ -23,7 +23,7 @@ import logging
 
 from config import Config
 from microsoft_todo_client import MicrosoftTodoDirectClient
-from core.token_store import TokenBundle, TokenStore
+from core.token_store import TokenStore
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,42 @@ def _resolve_zone(tz_name: Optional[str]) -> ZoneInfo:
         return _DEFAULT_TZ
 
 
+def _normalize_local_datetime(value: str, tz: ZoneInfo) -> datetime:
+    v = (value or "").strip()
+    if not v:
+        raise ValueError("empty datetime")
+    dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=tz)
+    return dt.astimezone(tz)
+
+
+def _normalize_due_input(due: Optional[str], tz: ZoneInfo) -> Optional[str]:
+    if not due:
+        return None
+    s = due.strip()
+    if not s:
+        return None
+    if "T" not in s:
+        y, m, d = (int(x) for x in s.split("-"))
+        return datetime(y, m, d, 23, 59, 0).isoformat(timespec="seconds")
+    dt = _normalize_local_datetime(s, tz)
+    return dt.replace(tzinfo=None).isoformat(timespec="seconds")
+
+
+def _normalize_reminder_input(reminder: Optional[str], tz: ZoneInfo) -> Optional[str]:
+    if not reminder:
+        return None
+    s = reminder.strip()
+    if not s:
+        return None
+    if "T" not in s:
+        y, m, d = (int(x) for x in s.split("-"))
+        return datetime(y, m, d, 9, 0, 0).isoformat(timespec="seconds")
+    dt = _normalize_local_datetime(s, tz)
+    return dt.replace(tzinfo=None).isoformat(timespec="seconds")
+
+
 def _to_shanghai_iso(value: Any) -> Optional[str]:
     if isinstance(value, dict):
         date_str = value.get("dateTime")
@@ -80,6 +116,30 @@ def _to_shanghai_iso(value: Any) -> Optional[str]:
         dt = dt.replace(tzinfo=_resolve_zone(source_tz))
 
     return dt.astimezone(_DEFAULT_TZ).isoformat(timespec="seconds")
+
+
+def _to_local_iso(value: Any, tz: ZoneInfo) -> Optional[str]:
+    if isinstance(value, dict):
+        date_str = value.get("dateTime")
+        source_tz = value.get("timeZone")
+    elif isinstance(value, str):
+        date_str = value
+        source_tz = None
+    else:
+        return None
+
+    if not isinstance(date_str, str) or not date_str:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except Exception:
+        return date_str
+
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_resolve_zone(source_tz))
+
+    return dt.astimezone(tz).isoformat(timespec="seconds")
 
 
 class MSTodoCore:
@@ -142,9 +202,28 @@ class MSTodoCore:
         if not lists:
             raise RuntimeError("No task lists found")
         for l in lists:
-            if l.get("wellknown") == "defaultList":
-                return l["id"]
-        return lists[0]["id"]
+            if l.get("wellknown") == "defaultList" and l.get("id"):
+                return str(l["id"])
+        for l in lists:
+            if l.get("id"):
+                return str(l["id"])
+        raise RuntimeError("No usable task list id found")
+
+    async def _find_list_id_for_task(self, task_id: str) -> Optional[str]:
+        task_id = (task_id or "").strip()
+        if not task_id:
+            return None
+        lists = await self.list_lists()
+        for l in lists:
+            lid = l.get("id")
+            if not lid:
+                continue
+            res = await self.client.get_task(list_id=str(lid), task_id=task_id)
+            if "error" in res:
+                continue
+            if res.get("id") == task_id:
+                return str(lid)
+        return None
 
     async def list_tasks(
         self,
@@ -158,14 +237,11 @@ class MSTodoCore:
 
         filter_parts = []
         if status and status != "all":
-            # Graph uses: notStarted, inProgress, completed, waitingOnOthers, deferred
             if status == "completed":
                 filter_parts.append("status eq 'completed'")
             else:
                 filter_parts.append("status ne 'completed'")
         if due_before:
-            # dueDateTime/dateTime is an ISO string; filter requires datetimeoffset
-            # We'll avoid server-side filtering complexity and filter client-side later.
             pass
 
         filter_query = None
@@ -183,10 +259,9 @@ class MSTodoCore:
             return d
 
         if due_before:
+            tz = _resolve_zone(Config.TIMEZONE)
             try:
-                due_before_dt = datetime.fromisoformat(
-                    due_before.replace("Z", "+00:00")
-                )
+                due_before_dt = _normalize_local_datetime(due_before, tz)
             except Exception:
                 raise RuntimeError(
                     "due_before must be ISO 8601, e.g. 2026-03-09T00:00:00Z"
@@ -198,7 +273,7 @@ class MSTodoCore:
                 if not d:
                     continue
                 try:
-                    d_dt = datetime.fromisoformat(d.replace("Z", "+00:00"))
+                    d_dt = _normalize_local_datetime(d, tz)
                 except Exception:
                     continue
                 if d_dt <= due_before_dt:
@@ -207,6 +282,7 @@ class MSTodoCore:
 
         tasks = tasks[: max(1, int(limit))]
 
+        tz = _resolve_zone(Config.TIMEZONE)
         out = []
         for t in tasks:
             reminder_raw = t.get("reminderDateTime")
@@ -218,7 +294,7 @@ class MSTodoCore:
                     "created": t.get("createdDateTime"),
                     "lastModified": t.get("lastModifiedDateTime"),
                     "due": (t.get("dueDateTime") or {}).get("dateTime"),
-                    "reminder": _to_shanghai_iso(reminder_raw),
+                    "reminder": _to_local_iso(reminder_raw, tz),
                     # Include body for device/bridge note extraction.
                     "body": t.get("body"),
                     "list_id": list_id,
@@ -242,12 +318,15 @@ class MSTodoCore:
         hits: List[SearchHit] = []
         q = query.lower()
         for t in tasks:
-            title = t.get("title") or ""
+            task_id_value = t.get("id")
+            if not task_id_value:
+                continue
+            task_id = str(task_id_value)
+            title = str(t.get("title") or "")
             tl = title.lower()
 
             score = 0.0
             if q in tl:
-                # substring hit, prefer shorter distance
                 score = 0.7 + min(0.3, len(q) / max(1, len(tl)))
             else:
                 score = difflib.SequenceMatcher(None, q, tl).ratio()
@@ -257,8 +336,8 @@ class MSTodoCore:
 
             hits.append(
                 SearchHit(
-                    task_id=t["id"],
-                    list_id=t["list_id"],
+                    task_id=task_id,
+                    list_id=str(t.get("list_id") or ""),
                     title=title,
                     status=t.get("status"),
                     score=float(score),
@@ -266,7 +345,7 @@ class MSTodoCore:
                 )
             )
 
-        hits.sort(key=lambda h: h.score, reverse=True)
+        hits.sort(key=lambda h: (-h.score, h.title.lower(), h.task_id))
         return hits[: max(1, int(limit))]
 
     async def create_task(
@@ -284,20 +363,24 @@ class MSTodoCore:
         if not list_id:
             list_id = await self._default_list_id()
 
-        if reminder:
+        tz = _resolve_zone(Config.TIMEZONE)
+        due_dt = _normalize_due_input(due, tz)
+        reminder_dt = _normalize_reminder_input(reminder, tz)
+
+        if reminder_dt:
             res = await self.client.create_task_with_reminder(
                 list_id=list_id,
                 title=title,
                 description=note,
-                due_date=due,
-                reminder_datetime=reminder,
+                due_date=due_dt,
+                reminder_datetime=reminder_dt,
             )
         else:
             res = await self.client.create_task(
                 list_id=list_id,
                 title=title,
                 description=note,
-                due_date=due,
+                due_date=due_dt,
             )
 
         if "error" in res:
@@ -326,8 +409,10 @@ class MSTodoCore:
             raise RuntimeError("task_id is required")
 
         if not list_id:
-            # try infer by scanning default list only (fast path)
-            list_id = await self._default_list_id()
+            list_id = (
+                await self._find_list_id_for_task(task_id)
+                or await self._default_list_id()
+            )
 
         title = patch.get("title")
         note = patch.get("note")
@@ -335,14 +420,20 @@ class MSTodoCore:
         due = patch.get("due")
         reminder = patch.get("reminder")
 
+        tz = _resolve_zone(Config.TIMEZONE)
+        due_dt = _normalize_due_input(due, tz) if due is not None else None
+        reminder_dt = (
+            _normalize_reminder_input(reminder, tz) if reminder is not None else None
+        )
+
         res = await self.client.update_task(
             list_id=list_id,
             task_id=task_id,
             title=title,
             description=note,
             status=status,
-            due_date=due,
-            reminder_datetime=reminder,
+            due_date=due_dt,
+            reminder_datetime=reminder_dt,
         )
         if "error" in res:
             raise RuntimeError(res["error"])
@@ -376,7 +467,10 @@ class MSTodoCore:
             raise RuntimeError("task_id is required")
 
         if not list_id:
-            list_id = await self._default_list_id()
+            list_id = (
+                await self._find_list_id_for_task(task_id)
+                or await self._default_list_id()
+            )
 
         res = await self.client.delete_task(list_id=list_id, task_id=task_id)
         if "error" in res:

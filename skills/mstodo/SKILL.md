@@ -102,7 +102,15 @@ Options: `--list-id <ID>`, `--due <ISO_DATE>`, `--reminder <ISO_DATETIME>`, `--n
 uv run {baseDir}/scripts/run.py update --task-id <ID> --title "New title" --due "2025-03-25"
 ```
 
-Options: `--list-id <ID>`, `--title`, `--due`, `--reminder`, `--note`, `--status`
+You can also resolve by title query:
+
+```bash
+uv run {baseDir}/scripts/run.py update --query "meeting" --title "New title"
+```
+
+Options: `--task-id <ID>`, `--query <TEXT>`, `--list-id <ID>`, `--title`, `--due`, `--reminder`, `--note`, `--status`
+
+Note: `--task-id` and `--query` are mutually exclusive.
 
 ### Complete a task
 
@@ -110,7 +118,15 @@ Options: `--list-id <ID>`, `--title`, `--due`, `--reminder`, `--note`, `--status
 uv run {baseDir}/scripts/run.py complete --task-id <ID>
 ```
 
-Options: `--list-id <ID>`
+You can also resolve by title query:
+
+```bash
+uv run {baseDir}/scripts/run.py complete --query "meeting"
+```
+
+Options: `--task-id <ID>`, `--query <TEXT>`, `--list-id <ID>`
+
+Note: `--task-id` and `--query` are mutually exclusive.
 
 ### Delete a task
 
@@ -118,7 +134,35 @@ Options: `--list-id <ID>`
 uv run {baseDir}/scripts/run.py delete --task-id <ID>
 ```
 
-Options: `--list-id <ID>`
+You can also resolve by title query:
+
+```bash
+uv run {baseDir}/scripts/run.py delete --query "meeting"
+```
+
+Options: `--task-id <ID>`, `--query <TEXT>`, `--list-id <ID>`
+
+Note: `--task-id` and `--query` are mutually exclusive.
+
+### Complex heartbeat todo (fun mode)
+
+```bash
+uv run {baseDir}/scripts/run.py complex_todo --goal "Ship a resilient sync pipeline" --beats 6
+```
+
+Returns a structured plan with:
+- `heartbeat_mode`: marker for OpenClaw-style heartbeat integration
+- `heartbeats`: progress events (`beat`, `phase`, `progress`, `pulse`, `message`)
+- `todos`: complex-task breakdown ready for orchestration
+
+Contract details:
+- `beats_requested`: user input
+- `beats_applied`: internal clamp to `3..12`
+- `schema_version`: currently `1`
+- Heartbeat phases may be compressed when beat count is low; todo phases always cover `scan/shape/build/verify/ship`
+- Existing keys are stable; new keys may be added in future
+
+This command is read-only and does not call Microsoft Graph.
 
 ## Output format
 
@@ -131,8 +175,20 @@ Every command returns JSON to stdout:
 On error:
 
 ```json
-{"success": false, "error": "description of what went wrong"}
+{"success": false, "error": "description of what went wrong", "error_code": "machine_readable_code"}
 ```
+
+`error_code` is stable for programmatic handling. Typical values:
+- `invalid_argument`
+- `missing_env`
+- `oauth_exchange_failed`
+- `oauth_missing_refresh_token`
+- `unknown_command`
+- `runtime_error`
+
+For query-based write commands, additional error codes may appear:
+- `task_not_found` with `data: { query, candidates: [] }`
+- `ambiguous_task` with `data: { query, candidates: [...] }`
 
 Exit code 0 = success, 1 = error.
 

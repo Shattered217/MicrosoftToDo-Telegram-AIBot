@@ -28,6 +28,11 @@ metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_C
    - For straightforward requests like "创建一个吃饭任务，明天18:00提醒", execute in one direct command.
    - Do not run unrelated diagnostics (auth_status/lists/search) before a simple create/list unless the command fails.
    - On failure, run at most one targeted diagnosis, then retry once.
+6. **Concise title + rich note**
+   - Keep task title short and action-oriented (one line, core intent only).
+   - Put contextual details into note as compact bullet-like lines (location, time window, participants, constraints, references).
+   - Do not hardcode domain templates; extract detail fields from user input when available.
+   - If key detail is missing and would change execution, ask one concise clarification question.
 
 ## Handling image inputs
 
@@ -41,7 +46,7 @@ When user sends an image with TODO request:
 2. **Combine image analysis with user text**:
    - User text provides timing/priority ("明天", "下周")
    - Image provides the subject matter (what to do)
-   - Create descriptive task title combining both
+   - Keep title concise; put extracted supporting details into note
 
 3. **Handle ambiguity**:
    - If image content is unclear, ask one concise clarification question

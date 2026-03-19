@@ -31,12 +31,12 @@ metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_C
 
 ## Handling image inputs
 
-When user sends an image with TODO request:
+When user sends an image with TODO request (e.g., "TODO 明天吃" with food photo):
 
 1. **Extract task details from image context**:
    - Analyze image content to understand what the TODO is about
-   - Use image evidence as context, not as a hardcoded template
-   - If OCR text is available, prefer explicit text signals over visual guesses
+   - Example: Food photo → task title should describe the food item
+   - Example: Screenshot → extract relevant text or context
 
 2. **Combine image analysis with user text**:
    - User text provides timing/priority ("明天", "下周")
@@ -44,13 +44,13 @@ When user sends an image with TODO request:
    - Create descriptive task title combining both
 
 3. **Handle ambiguity**:
-   - If image content is unclear, ask one concise clarification question
-   - Offer 1-3 candidate interpretations only when confidence is low
+   - If image content is unclear, ask user for clarification
+   - Example: "I see a food photo. Should the task be '买[food name]' or '吃[food name]'?"
 
 4. **Time extraction**:
    - Parse relative time from user text ("明天" = tomorrow, "下周" = next week)
-   - If user does not provide a concrete time, do not hardcode domain-specific defaults.
-   - Prefer asking one clarification question for reminder time, or create without reminder when user intent is date-only.
+   - Default time: 18:00 for meal-related tasks, 09:00 for others
+   - Always confirm extracted time with user if not explicitly stated
 
 ## First-time setup
 

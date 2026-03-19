@@ -125,28 +125,6 @@ async def _resolve_task_id_by_query(
         }
         for h in hits
     ]
-
-    # Prefer a single exact title match first (case-insensitive)
-    q_norm = q.strip().lower()
-    exact = [
-        c
-        for c in candidates
-        if isinstance(c.get("title"), str) and c["title"].strip().lower() == q_norm
-    ]
-    if len(exact) == 1:
-        return exact[0]["task_id"], exact
-    if len(exact) > 1:
-        return None, exact
-
-    # If top candidate is clearly dominant, resolve directly to reduce noisy disambiguation.
-    if len(candidates) >= 2:
-        top = candidates[0]
-        second = candidates[1]
-        top_score = float(top.get("score", 0.0))
-        second_score = float(second.get("score", 0.0))
-        if top_score >= 0.85 and (top_score - second_score) >= 0.20:
-            return top["task_id"], [top]
-
     if len(candidates) == 1:
         return candidates[0]["task_id"], candidates
     return None, candidates

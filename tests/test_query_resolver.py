@@ -118,67 +118,6 @@ class TestQueryResolver(unittest.TestCase):
             self.assertIn("due", cand)
             self.assertIn("score", cand)
 
-    def test_complete_query_exact_match_wins_over_fuzzy(self) -> None:
-        args = Namespace(task_id=None, query="Dinner", list_id=None)
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            self._run_with_stub_core(
-                args,
-                hits=[
-                    {
-                        "task_id": "t1",
-                        "list_id": "l1",
-                        "title": "Dinner",
-                        "score": 1.0,
-                    },
-                    {
-                        "task_id": "t2",
-                        "list_id": "l1",
-                        "title": "Dinner plan",
-                        "score": 0.72,
-                    },
-                ],
-                mode="complete",
-            )
-        payload = json.loads(buf.getvalue())
-        self.assertTrue(payload["success"])
-        self.assertEqual(payload["data"]["task"]["id"], "t1")
-
-    def test_update_query_dominant_top_score_resolves(self) -> None:
-        args = Namespace(
-            task_id=None,
-            query="buy milk",
-            list_id=None,
-            title="x",
-            due=None,
-            reminder=None,
-            note=None,
-            status=None,
-        )
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            self._run_with_stub_core(
-                args,
-                hits=[
-                    {
-                        "task_id": "t1",
-                        "list_id": "l1",
-                        "title": "buy milk",
-                        "score": 0.93,
-                    },
-                    {
-                        "task_id": "t2",
-                        "list_id": "l1",
-                        "title": "buy eggs",
-                        "score": 0.58,
-                    },
-                ],
-                mode="update",
-            )
-        payload = json.loads(buf.getvalue())
-        self.assertTrue(payload["success"])
-        self.assertEqual(payload["data"]["task"]["id"], "t1")
-
     def test_delete_query_not_found_returns_empty_candidates(self) -> None:
         args = Namespace(task_id=None, query="missing", list_id=None)
         buf = io.StringIO()

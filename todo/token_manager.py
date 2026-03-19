@@ -32,14 +32,14 @@ class TokenManagerMixin:
     def _save_tokens_to_env(
         self, access_token: str, refresh_token: Optional[str] = None
     ) -> bool:
-        """将token保存到.env文件"""
+        """将 token 保存到本地缓存文件（默认项目目录 .env）"""
         try:
             env_lines = []
             try:
                 with open(".env", "r", encoding="utf-8") as f:
                     env_lines = f.readlines()
             except FileNotFoundError:
-                logger.warning(".env文件不存在，将创建新文件")
+                logger.warning("本地 token 缓存文件不存在，将创建新文件(.env)")
 
             access_token_found = False
             refresh_token_found = False
@@ -63,7 +63,7 @@ class TokenManagerMixin:
             return True
 
         except Exception as e:
-            logger.error(f"保存Token到.env失败: {e}")
+            logger.error(f"保存 token 到本地缓存失败(.env): {e}")
             return False
 
     async def _refresh_access_token(self) -> bool:
@@ -77,8 +77,10 @@ class TokenManagerMixin:
             return await self._get_client_credentials_token()
 
         if not self.client_id:
-            logger.error("缺少client_id，无法刷新令牌")
-            logger.info("请在.env文件中设置 MS_TODO_CLIENT_ID")
+            logger.error("缺少 client_id，无法刷新令牌")
+            logger.info(
+                "请通过当前运行环境注入 MS_TODO_CLIENT_ID（例如 openclaw.json env 或 bridge.env）"
+            )
             return False
 
         await self._ensure_session()

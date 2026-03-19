@@ -24,6 +24,10 @@ metadata: {"openclaw":{"emoji":"✅","requires":{"bins":["uv"],"env":["MS_TODO_C
    - Never delete without an explicit confirmation in the same chat.
 4. **Never echo tokens**
    - Do not print access_token / refresh_token in chat logs.
+5. **Minimal execution for simple intents**
+   - For straightforward requests like "创建一个吃饭任务，明天18:00提醒", execute in one direct command.
+   - Do not run unrelated diagnostics (auth_status/lists/search) before a simple create/list unless the command fails.
+   - On failure, run at most one targeted diagnosis, then retry once.
 
 ## Handling image inputs
 
@@ -81,6 +85,11 @@ This will:
 - Wrong timezone = wrong task times (e.g., 18:00 becomes 10:00)
 - Common values: `Asia/Shanghai`, `America/New_York`, `Europe/London`
 - Default if not set: `Asia/Shanghai`
+
+**Runtime env source by mode**:
+- OpenClaw chat skill mode: read env from `~/.openclaw/openclaw.json` (`env` section)
+- ESP32 bridge service mode: read env from `~/.openclaw/state/mstodo/bridge.env` (systemd `EnvironmentFile`)
+- `.env` in project directory is only a local token cache, not the authoritative service config source
 
 ### 3) Authentication (interactive OAuth)
 

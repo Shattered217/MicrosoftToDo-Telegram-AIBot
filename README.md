@@ -69,6 +69,9 @@ uv sync --project <项目路径>
 }
 ```
 
+> 说明：OpenClaw 对话模式读取 `openclaw.json` 的 `env`。
+> 如果运行 ESP32 bridge(systemd)，环境变量来自 `~/.openclaw/state/mstodo/bridge.env`，不是这里。
+
 ---
 
 ## 配置说明

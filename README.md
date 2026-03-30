@@ -35,19 +35,23 @@ OpenClaw → bash → uv run scripts/run.py <command> → JSON stdout
 
 ## 安装
 
-### 1) 复制 skill 到 OpenClaw workspace
+### 一键安装（推荐）
+
+在项目根目录执行：
 
 ```bash
-cp -a ./skills/mstodo ~/.openclaw/workspace/skills/mstodo
+./scripts/install-mstodo.sh
 ```
 
-### 2) 安装依赖
+这个脚本会自动完成：
 
-```bash
-uv sync --project <项目路径>
-```
+- 复制 `skills/mstodo` 到 `~/.openclaw/workspace/skills/mstodo`
+- 安装 Python 依赖（自动寻找 `uv`）
+- 创建状态目录 `~/.openclaw/state/mstodo`
 
-### 3) 配置 OpenClaw
+完成后，再配置 OpenClaw 环境变量。
+
+### 配置 OpenClaw
 
 在 `~/.openclaw/openclaw.json` 中设置 skill 环境变量：
 
@@ -71,6 +75,16 @@ uv sync --project <项目路径>
 
 > 说明：OpenClaw 对话模式读取 `openclaw.json` 的 `env`。
 > 如果运行 ESP32 bridge(systemd)，环境变量来自 `~/.openclaw/state/mstodo/bridge.env`，不是这里。
+
+### 手动安装（仅排障/高级用法）
+
+如果你不想用脚本，才需要手动执行以下步骤：
+
+```bash
+cp -a ./skills/mstodo ~/.openclaw/workspace/skills/mstodo
+uv sync --project <项目路径>
+mkdir -p ~/.openclaw/state/mstodo
+```
 
 ---
 

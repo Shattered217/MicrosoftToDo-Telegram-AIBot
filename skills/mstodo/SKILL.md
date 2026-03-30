@@ -59,7 +59,7 @@ When user sends an image with TODO request:
 
 ## First-time setup
 
-### 1) Install dependencies
+### 1) One-click install
 
 Run the installation script to deploy the full project:
 
@@ -71,6 +71,8 @@ This will:
 - Deploy project to `~/.openclaw/tools/mstodo`
 - Install dependencies via `uv sync`
 - Copy skill to `~/.openclaw/workspace/skills/mstodo`
+
+Manual copy/sync should be treated as troubleshooting only, not the default install flow.
 
 ### 2) Configure environment variables
 
